@@ -1,0 +1,6 @@
+@BoilerPlate.Authentication.WebApi_HostAddress = http://localhost:5199
+
+GET {{BoilerPlate.Authentication.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
