@@ -10,6 +10,12 @@ namespace BoilerPlate.ServiceBus.Abstractions.Tests.Implementations.Null;
 /// </summary>
 public class NullSubscriberFactoryTests
 {
+    /// <summary>
+    /// Tests that NullTopicSubscriberFactory.CreateSubscriber returns a NullTopicSubscriber instance.
+    /// Verifies that:
+    /// - The factory creates a subscriber instance
+    /// - The returned subscriber is of type NullTopicSubscriber for the specified message type
+    /// </summary>
     [Fact]
     public void NullTopicSubscriberFactory_CreateSubscriber_ShouldReturnNullTopicSubscriber()
     {
@@ -24,6 +30,13 @@ public class NullSubscriberFactoryTests
         subscriber.Should().BeOfType<NullTopicSubscriber<TestMessage>>();
     }
 
+    /// <summary>
+    /// Tests that NullTopicSubscriberFactory.CreateSubscriber returns different subscriber instances for different message types.
+    /// Verifies that:
+    /// - Each message type gets its own subscriber instance
+    /// - Subscribers are correctly typed for their respective message types
+    /// - Different message types produce different subscriber instances
+    /// </summary>
     [Fact]
     public void NullTopicSubscriberFactory_CreateSubscriber_WithDifferentTypes_ShouldReturnCorrectSubscriber()
     {
@@ -40,6 +53,12 @@ public class NullSubscriberFactoryTests
         subscriber1.Should().NotBeSameAs(subscriber2);
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriberFactory.CreateSubscriber returns a NullQueueSubscriber instance.
+    /// Verifies that:
+    /// - The factory creates a subscriber instance
+    /// - The returned subscriber is of type NullQueueSubscriber for the specified message type
+    /// </summary>
     [Fact]
     public void NullQueueSubscriberFactory_CreateSubscriber_ShouldReturnNullQueueSubscriber()
     {
@@ -54,6 +73,13 @@ public class NullSubscriberFactoryTests
         subscriber.Should().BeOfType<NullQueueSubscriber<TestMessage>>();
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriberFactory.CreateSubscriber returns different subscriber instances for different message types.
+    /// Verifies that:
+    /// - Each message type gets its own subscriber instance
+    /// - Subscribers are correctly typed for their respective message types
+    /// - Different message types produce different subscriber instances
+    /// </summary>
     [Fact]
     public void NullQueueSubscriberFactory_CreateSubscriber_WithDifferentTypes_ShouldReturnCorrectSubscriber()
     {

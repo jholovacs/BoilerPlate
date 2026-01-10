@@ -21,6 +21,13 @@ public class MessageFailureHandlerTests
 
     #region Success Handling Tests
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync resets the message failure count to zero when the handler succeeds.
+    /// Verifies that:
+    /// - The failure count is reset to 0 after successful processing
+    /// - ShouldDestroy returns false indicating the message should not be destroyed
+    /// - Previous failure counts are cleared on success
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerSucceeds_ShouldResetFailureCount()
     {
@@ -43,6 +50,12 @@ public class MessageFailureHandlerTests
         message.FailureCount.Should().Be(0);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync returns false (do not destroy) when the handler succeeds.
+    /// Verifies that:
+    /// - ShouldDestroy is false after successful processing
+    /// - The message is not marked for destruction on success
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerSucceeds_ShouldNotDestroyMessage()
     {
@@ -68,6 +81,13 @@ public class MessageFailureHandlerTests
 
     #region Temporary Failure Tests
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync increments the failure count when the handler fails but hasn't exceeded the maximum.
+    /// Verifies that:
+    /// - The failure count is incremented by one on each failure
+    /// - ShouldDestroy returns false when below the maximum failure count
+    /// - The message is still eligible for retry
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerFailsBelowMaxCount_ShouldIncrementFailureCount()
     {
@@ -90,6 +110,12 @@ public class MessageFailureHandlerTests
         message.FailureCount.Should().Be(2);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync returns false (do not destroy) when failures are below the maximum count.
+    /// Verifies that:
+    /// - ShouldDestroy is false when failure count hasn't exceeded the maximum
+    /// - The message should be retried rather than destroyed
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerFailsBelowMaxCount_ShouldNotDestroyMessage()
     {
@@ -111,6 +137,13 @@ public class MessageFailureHandlerTests
         shouldDestroy.Should().BeFalse();
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync logs a warning when the handler fails.
+    /// Verifies that:
+    /// - A warning log entry is created with the message "Message processing failed"
+    /// - The log includes exception details
+    /// - Failure events are properly logged for monitoring
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerFails_ShouldLogWarning()
     {
@@ -143,6 +176,13 @@ public class MessageFailureHandlerTests
 
     #region Permanent Failure Tests
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync returns true (destroy message) when the failure count exceeds the maximum.
+    /// Verifies that:
+    /// - ShouldDestroy is true when failure count exceeds maxFailureCount
+    /// - The failure count is still incremented even when exceeding the maximum
+    /// - The message is marked for permanent destruction
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerFailsExceedsMaxCount_ShouldReturnTrue()
     {
@@ -165,6 +205,13 @@ public class MessageFailureHandlerTests
         message.FailureCount.Should().Be(4);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync logs an error when the failure count exceeds the maximum.
+    /// Verifies that:
+    /// - An error log entry is created with the message "permanently failed"
+    /// - Permanent failures are logged at error level
+    /// - The log includes exception details for permanent failures
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenHandlerFailsExceedsMaxCount_ShouldLogError()
     {
@@ -193,6 +240,13 @@ public class MessageFailureHandlerTests
             Times.Once);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync invokes the permanent failure callback when the failure count exceeds the maximum.
+    /// Verifies that:
+    /// - The callback is invoked with the failed message and exception
+    /// - The callback receives the correct message and exception details
+    /// - Permanent failure handlers can perform custom actions (e.g., dead letter queue)
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenPermanentFailure_ShouldInvokeCallback()
     {
@@ -226,6 +280,13 @@ public class MessageFailureHandlerTests
         capturedException!.Message.Should().Be("Test error");
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync handles exceptions thrown by the permanent failure callback gracefully.
+    /// Verifies that:
+    /// - Exceptions in the callback are caught and logged as errors
+    /// - ShouldDestroy still returns true even if the callback throws
+    /// - Callback failures do not prevent message destruction
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenCallbackThrows_ShouldLogErrorAndContinue()
     {
@@ -262,6 +323,13 @@ public class MessageFailureHandlerTests
 
     #region Metadata Tests
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync passes metadata to the message handler.
+    /// Verifies that:
+    /// - Metadata provided to ProcessWithFailureHandlingAsync is passed to the handler
+    /// - The same metadata dictionary instance is passed through
+    /// - Metadata is available for handler processing
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_ShouldPassMetadataToHandler()
     {
@@ -290,6 +358,13 @@ public class MessageFailureHandlerTests
         capturedMetadata.Should().BeSameAs(metadata);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync passes metadata to the permanent failure callback.
+    /// Verifies that:
+    /// - Metadata is passed to the callback when a permanent failure occurs
+    /// - The same metadata dictionary instance is passed to the callback
+    /// - Metadata is available for callback processing (e.g., dead letter queue)
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_ShouldPassMetadataToCallback()
     {
@@ -324,6 +399,13 @@ public class MessageFailureHandlerTests
 
     #region Cancellation Tests
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync passes the cancellation token to the message handler.
+    /// Verifies that:
+    /// - The cancellation token provided is passed to the handler
+    /// - Handlers can respect cancellation requests
+    /// - Token propagation enables cooperative cancellation
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_ShouldPassCancellationTokenToHandler()
     {
@@ -353,6 +435,13 @@ public class MessageFailureHandlerTests
         capturedToken.Should().Be(cts.Token);
     }
 
+    /// <summary>
+    /// Tests that ProcessWithFailureHandlingAsync treats OperationCanceledException as a failure when cancellation is requested.
+    /// Verifies that:
+    /// - Cancellation exceptions are caught and treated as processing failures
+    /// - The failure count is incremented when cancellation occurs
+    /// - ShouldDestroy returns false (treat cancellation as a retryable failure, not permanent)
+    /// </summary>
     [Fact]
     public async Task ProcessWithFailureHandlingAsync_WhenCancellationRequested_ShouldHandleAsFailure()
     {

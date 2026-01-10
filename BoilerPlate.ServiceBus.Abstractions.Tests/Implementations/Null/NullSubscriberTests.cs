@@ -10,6 +10,12 @@ namespace BoilerPlate.ServiceBus.Abstractions.Tests.Implementations.Null;
 /// </summary>
 public class NullSubscriberTests
 {
+    /// <summary>
+    /// Tests that NullTopicSubscriber.SubscribeAsync completes successfully without throwing exceptions.
+    /// Verifies that:
+    /// - The subscription operation completes successfully (no-op implementation)
+    /// - No actual subscription is performed
+    /// </summary>
     [Fact]
     public async Task NullTopicSubscriber_SubscribeAsync_ShouldCompleteSuccessfully()
     {
@@ -25,6 +31,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullTopicSubscriber.SubscribeAsync with failure handling completes successfully.
+    /// Verifies that:
+    /// - The subscription operation accepts failure handling parameters
+    /// - The method executes without errors (no-op implementation)
+    /// </summary>
     [Fact]
     public async Task NullTopicSubscriber_SubscribeAsync_WithFailureHandling_ShouldCompleteSuccessfully()
     {
@@ -42,6 +54,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullTopicSubscriber.UnsubscribeAsync completes successfully without throwing exceptions.
+    /// Verifies that:
+    /// - The unsubscribe operation completes successfully (no-op implementation)
+    /// - No actual unsubscription is performed
+    /// </summary>
     [Fact]
     public async Task NullTopicSubscriber_UnsubscribeAsync_ShouldCompleteSuccessfully()
     {
@@ -55,6 +73,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriber.SubscribeAsync completes successfully without throwing exceptions.
+    /// Verifies that:
+    /// - The subscription operation completes successfully (no-op implementation)
+    /// - No actual subscription is performed
+    /// </summary>
     [Fact]
     public async Task NullQueueSubscriber_SubscribeAsync_ShouldCompleteSuccessfully()
     {
@@ -70,6 +94,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriber.SubscribeAsync with failure handling completes successfully.
+    /// Verifies that:
+    /// - The subscription operation accepts failure handling parameters
+    /// - The method executes without errors (no-op implementation)
+    /// </summary>
     [Fact]
     public async Task NullQueueSubscriber_SubscribeAsync_WithFailureHandling_ShouldCompleteSuccessfully()
     {
@@ -87,6 +117,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriber.UnsubscribeAsync completes successfully without throwing exceptions.
+    /// Verifies that:
+    /// - The unsubscribe operation completes successfully (no-op implementation)
+    /// - No actual unsubscription is performed
+    /// </summary>
     [Fact]
     public async Task NullQueueSubscriber_UnsubscribeAsync_ShouldCompleteSuccessfully()
     {
@@ -100,6 +136,12 @@ public class NullSubscriberTests
         await act.Should().NotThrowAsync();
     }
 
+    /// <summary>
+    /// Tests that NullTopicSubscriber.SubscribeAsync does not invoke the provided message handler.
+    /// Verifies that:
+    /// - Handlers are not invoked after subscription (no-op behavior)
+    /// - No messages are processed even after a delay
+    /// </summary>
     [Fact]
     public async Task NullTopicSubscriber_SubscribeAsync_ShouldNotInvokeHandler()
     {
@@ -121,6 +163,12 @@ public class NullSubscriberTests
         handlerInvoked.Should().BeFalse();
     }
 
+    /// <summary>
+    /// Tests that NullQueueSubscriber.SubscribeAsync does not invoke the provided message handler.
+    /// Verifies that:
+    /// - Handlers are not invoked after subscription (no-op behavior)
+    /// - No messages are processed even after a delay
+    /// </summary>
     [Fact]
     public async Task NullQueueSubscriber_SubscribeAsync_ShouldNotInvokeHandler()
     {
