@@ -185,7 +185,13 @@ The following environment variables can be used to configure the authentication 
 
 - **`JWT_PRIVATE_KEY`** - RSA private key in PEM format for signing JWT tokens
   - This overrides the `PrivateKey` value in `appsettings.json`
-  - The key should be in PEM format: `-----BEGIN RSA PRIVATE KEY-----...-----END RSA PRIVATE KEY-----`
+  - **Recommended for Docker/Containerized environments**: Base64-encoded PEM format
+    - The application automatically detects and decodes base64-encoded keys
+    - Base64-encoded keys avoid issues with newlines and special characters in environment variables
+    - Example (PowerShell): `[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content private_key.pem -Raw)))`
+    - Example (Linux/macOS): `cat private_key.pem | base64 | tr -d '\n'`
+  - **Also supported**: Plain PEM format with `-----BEGIN RSA PRIVATE KEY-----...-----END RSA PRIVATE KEY-----` markers
+    - When using plain PEM format, ensure newlines are preserved or use `\n` escape sequences
   - **Important**: The key must be unencrypted. If you have an encrypted key, decrypt it first using OpenSSL:
     ```bash
     openssl rsa -in encrypted_key.pem -out decrypted_key.pem
@@ -195,7 +201,8 @@ The following environment variables can be used to configure the authentication 
 
 - **`JWT_PUBLIC_KEY`** - RSA public key in PEM format for validating JWT tokens
   - This overrides the `PublicKey` value in `appsettings.json`
-  - The key should be in PEM format: `-----BEGIN RSA PUBLIC KEY-----...-----END RSA PUBLIC KEY-----`
+  - **Recommended for Docker/Containerized environments**: Base64-encoded PEM format (same as private key)
+  - **Also supported**: Plain PEM format with `-----BEGIN RSA PUBLIC KEY-----...-----END RSA PUBLIC KEY-----` markers
   - If only the public key is provided (and no private key), the service can validate tokens but cannot generate new ones
 
 - **`JWT_PRIVATE_KEY_PASSWORD`** - Password for the private key (if encrypted)
@@ -210,17 +217,101 @@ The following environment variables can be used to configure the authentication 
 - **`ADMIN_PASSWORD`** - Password for the service administrator account (required for admin user initialization)
 - **`ADMIN_TENANT_ID`** - Optional tenant ID (UUID) for the admin user. If not specified, a "System" tenant will be created/used
 
+#### MongoDB Logging Configuration
+
+- **`MONGODB_CONNECTION_STRING`** - **REQUIRED** MongoDB connection string for Serilog logging
+  - The application uses Serilog to write all logs to a MongoDB collection named "logs"
+  - Connection string format: `mongodb://username:password@host:port/database` or `mongodb://host:port/database`
+  - The database name is parsed from the connection string. If not specified in the connection string, it defaults to "logs"
+  - A timestamp index is automatically created on the "logs" collection on application startup
+  - **Examples:**
+    - Local MongoDB: `mongodb://localhost:27017/logs`
+    - With credentials: `mongodb://admin:password@localhost:27017/logs`
+    - MongoDB Atlas: `mongodb+srv://username:password@cluster.mongodb.net/logs`
+    - Custom database: `mongodb://localhost:27017/myapp_logs`
+  - **Windows PowerShell:**
+    ```powershell
+    $env:MONGODB_CONNECTION_STRING="mongodb://localhost:27017/logs"
+    ```
+  - **Linux/macOS:**
+    ```bash
+    export MONGODB_CONNECTION_STRING="mongodb://localhost:27017/logs"
+    ```
+  - **Docker:**
+    ```bash
+    docker run -e MONGODB_CONNECTION_STRING="mongodb://mongo:27017/logs" ...
+    ```
+  - **Kubernetes Secret:**
+    ```yaml
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: mongodb-config
+    type: Opaque
+    stringData:
+      MONGODB_CONNECTION_STRING: "mongodb://username:password@mongodb-service:27017/logs"
+    ```
+  - **Note**: If this environment variable is not set, the application will fail to start with a clear error message
+
+#### RabbitMQ Service Bus Configuration
+
+- **`RABBITMQ_CONNECTION_STRING`** - Optional RabbitMQ connection string for asynchronous messaging
+  - If provided, overrides the connection string in `appsettings.json`
+  - Connection string format: `amqp://username:password@host:port/vhost` or `amqp://username:password@host:port/`
+  - **Examples:**
+    - Default (guest/guest): `amqp://guest:guest@localhost:5672/`
+    - With credentials: `amqp://admin:password@localhost:5672/`
+    - With virtual host: `amqp://admin:password@localhost:5672/my_vhost`
+  - **Windows PowerShell:**
+    ```powershell
+    $env:RABBITMQ_CONNECTION_STRING="amqp://guest:guest@localhost:5672/"
+    ```
+  - **Linux/macOS:**
+    ```bash
+    export RABBITMQ_CONNECTION_STRING="amqp://guest:guest@localhost:5672/"
+    ```
+  - **Note**: If not provided, the application will use the connection string from `appsettings.json` (defaults to `amqp://guest:guest@localhost:5672/`)
+
 #### Example Environment Variable Setup
 
-```bash
+**Using Base64-Encoded Keys (Recommended for Docker/Containerized environments):**
+
+```powershell
 # Windows PowerShell
+$env:JWT_EXPIRATION_MINUTES="30"
+# Base64 encode the keys (recommended for Docker)
+$env:JWT_PRIVATE_KEY=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content jwt-keys/private_key.pem -Raw)))
+$env:JWT_PUBLIC_KEY=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Content jwt-keys/public_key.pem -Raw)))
+$env:ADMIN_USERNAME="admin"
+$env:ADMIN_PASSWORD="SecurePassword123!"
+$env:MONGODB_CONNECTION_STRING="mongodb://localhost:27017/logs"
+$env:RABBITMQ_CONNECTION_STRING="amqp://guest:guest@localhost:5672/"
+```
+
+```bash
+# Linux/macOS
+export JWT_EXPIRATION_MINUTES=30
+# Base64 encode the keys (recommended for Docker)
+export JWT_PRIVATE_KEY="$(cat jwt-keys/private_key.pem | base64 | tr -d '\n')"
+export JWT_PUBLIC_KEY="$(cat jwt-keys/public_key.pem | base64 | tr -d '\n')"
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=SecurePassword123!
+export MONGODB_CONNECTION_STRING="mongodb://localhost:27017/logs"
+export RABBITMQ_CONNECTION_STRING="amqp://guest:guest@localhost:5672/"
+```
+
+**Using Plain PEM Format (Alternative):**
+
+```powershell
+# Windows PowerShell - Using plain PEM format with escape sequences
 $env:JWT_EXPIRATION_MINUTES="30"
 $env:JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----`nMIIEpAIBAAKCAQEA...`n-----END RSA PRIVATE KEY-----"
 $env:JWT_PUBLIC_KEY="-----BEGIN RSA PUBLIC KEY-----`nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...`n-----END RSA PUBLIC KEY-----"
-$env:ADMIN_USERNAME="admin"
-$env:ADMIN_PASSWORD="SecurePassword123!"
+# ... other variables ...
+```
 
-# Linux/macOS
+```bash
+# Linux/macOS - Using plain PEM format with actual newlines
 export JWT_EXPIRATION_MINUTES=30
 export JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA...
@@ -228,8 +319,7 @@ MIIEpAIBAAKCAQEA...
 export JWT_PUBLIC_KEY="-----BEGIN RSA PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
 -----END RSA PUBLIC KEY-----"
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=SecurePassword123!
+# ... other variables ...
 ```
 
 #### Using Environment Variables with Docker/Kubernetes
@@ -272,9 +362,11 @@ env:
 #### Priority Order
 
 Configuration values are loaded in the following priority order (highest to lowest):
-1. Environment variables (`JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_EXPIRATION_MINUTES`)
+1. Environment variables (`JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_EXPIRATION_MINUTES`, `MONGODB_CONNECTION_STRING`, `RABBITMQ_CONNECTION_STRING`)
 2. `appsettings.json` configuration file
-3. Default values (for expiration minutes only)
+3. Default values (for expiration minutes and RabbitMQ connection string only)
+
+**Note**: `MONGODB_CONNECTION_STRING` is **required** and must be provided as an environment variable. The application will not start without it.
 
 ### 3. Database Connection
 
@@ -286,6 +378,57 @@ Configure your database connection string in `appsettings.json`:
     "DefaultConnection": "Server=...;Database=...;..."
   }
 }
+```
+
+### 4. MongoDB Logging Setup
+
+The application uses Serilog with MongoDB sink to write all application logs to a MongoDB collection.
+
+#### Collection Details
+
+- **Collection Name**: `logs`
+- **Database**: Parsed from `MONGODB_CONNECTION_STRING` (defaults to "logs" if not specified)
+- **Indexed Field**: `Timestamp` (descending order for most recent first)
+- **Index Creation**: Automatic on application startup
+
+#### Log Collection Structure
+
+Each log entry in MongoDB contains:
+- `Timestamp` - ISO 8601 formatted timestamp (indexed)
+- `Level` - Log level (Information, Warning, Error, etc.)
+- `Message` - Log message
+- `Exception` - Exception details (if applicable)
+- `Properties` - Additional structured properties
+  - `Application` - Application name ("BoilerPlate.Authentication.WebApi")
+  - Other contextual properties from log context
+
+#### Log Levels
+
+- **Information**: General application flow and informational messages
+- **Warning**: Warnings and non-critical issues
+- **Error**: Errors and exceptions
+- **Fatal**: Critical errors that cause application shutdown
+
+Microsoft.AspNetCore logs are filtered to Warning level and above to reduce noise.
+
+#### Example MongoDB Query
+
+To query logs by timestamp (using the index):
+
+```javascript
+// Most recent logs first (uses index)
+db.logs.find().sort({ Timestamp: -1 }).limit(100)
+
+// Logs in a time range
+db.logs.find({
+  Timestamp: {
+    $gte: ISODate("2025-01-01T00:00:00Z"),
+    $lte: ISODate("2025-01-31T23:59:59Z")
+  }
+}).sort({ Timestamp: -1 })
+
+// Error logs only
+db.logs.find({ Level: "Error" }).sort({ Timestamp: -1 })
 ```
 
 ## API Endpoints

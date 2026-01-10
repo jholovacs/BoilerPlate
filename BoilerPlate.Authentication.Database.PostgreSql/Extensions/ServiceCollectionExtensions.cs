@@ -1,3 +1,4 @@
+using System.Linq;
 using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.PostgreSql;
 using Microsoft.AspNetCore.Identity;
@@ -38,8 +39,9 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         string connectionString)
     {
-        // Register BaseAuthDbContext with PostgreSQL (base context)
-        services.AddDbContext<BaseAuthDbContext>(options =>
+        // Register AuthenticationDbContext with AddDbContext - this properly registers it with EF Core
+        // This is required for AddEntityFrameworkStores to work correctly
+        services.AddDbContext<AuthenticationDbContext>(options =>
             options.UseNpgsql(connectionString, npgsqlOptions =>
             {
                 npgsqlOptions.MigrationsAssembly(typeof(AuthenticationDbContext).Assembly.FullName);
@@ -52,12 +54,47 @@ public static class ServiceCollectionExtensions
                 npgsqlOptions.SetPostgresVersion(new Version(12, 0));
             }), ServiceLifetime.Scoped);
         
-        // Register AuthenticationDbContext as a factory that uses BaseAuthDbContext options
-        services.AddScoped<AuthenticationDbContext>(serviceProvider =>
+        // Create BaseAuthDbContext options with the same configuration
+        // This is needed because AuthenticationDbContext constructor expects DbContextOptions<BaseAuthDbContext>
+        var baseOptionsBuilder = new DbContextOptionsBuilder<BaseAuthDbContext>();
+        baseOptionsBuilder.UseNpgsql(connectionString, npgsqlOptions =>
         {
-            var options = serviceProvider.GetRequiredService<DbContextOptions<BaseAuthDbContext>>();
-            return new AuthenticationDbContext(options);
+            npgsqlOptions.MigrationsAssembly(typeof(AuthenticationDbContext).Assembly.FullName);
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorCodesToAdd: null);
+            
+            // Set PostgreSQL version for compatibility
+            npgsqlOptions.SetPostgresVersion(new Version(12, 0));
         });
+        var baseOptions = baseOptionsBuilder.Options;
+        
+        // Register BaseAuthDbContext options (required for AuthenticationDbContext constructor)
+        services.AddSingleton(baseOptions);
+        services.AddSingleton<DbContextOptions<BaseAuthDbContext>>(baseOptions);
+        
+        // Override the AuthenticationDbContext registration to use BaseAuthDbContext options
+        // This is necessary because AuthenticationDbContext constructor expects DbContextOptions<BaseAuthDbContext>
+        // but AddDbContext<AuthenticationDbContext> creates DbContextOptions<AuthenticationDbContext>
+        var existingDescriptor = services.FirstOrDefault(s => 
+            s.ServiceType == typeof(AuthenticationDbContext) && 
+            s.Lifetime == ServiceLifetime.Scoped &&
+            s.ImplementationFactory != null);
+        
+        if (existingDescriptor != null)
+        {
+            services.Remove(existingDescriptor);
+        }
+        
+        // Register AuthenticationDbContext with custom factory that uses BaseAuthDbContext options
+        services.AddScoped<AuthenticationDbContext>(serviceProvider => 
+            new AuthenticationDbContext(baseOptions));
+        
+        // Register BaseAuthDbContext as an alias to AuthenticationDbContext for backward compatibility
+        // This allows code that depends on BaseAuthDbContext to still work
+        services.AddScoped<BaseAuthDbContext>(serviceProvider => 
+            serviceProvider.GetRequiredService<AuthenticationDbContext>());
 
         // Configure Identity
         services.AddIdentity<Entities.ApplicationUser, Entities.ApplicationRole>(options =>

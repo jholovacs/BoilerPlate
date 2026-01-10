@@ -18,6 +18,7 @@ public class AuthenticationDbContext : BaseAuthDbContext
         : base(options)
     {
     }
+    
 
     /// <summary>
     /// Configures the model that was discovered from the entity types

@@ -60,9 +60,17 @@ public class AdminUserInitializationService : IHostedService
                 return;
             }
 
-            // Look up the user by username (search across all tenants)
+            // Look up the user by username (search across all tenants for admin user)
+            // Use AsNoTracking to avoid tracking conflicts, then reload with UserManager if needed
             var user = await context.Users
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.UserName == adminUsername, cancellationToken);
+            
+            // If found, reload using UserManager to get a properly tracked entity for updates
+            if (user != null)
+            {
+                user = await userManager.FindByIdAsync(user.Id.ToString());
+            }
 
             Guid userTenantId;
             if (user == null)
@@ -125,8 +133,10 @@ public class AdminUserInitializationService : IHostedService
             }
 
             // Ensure "Service Administrator" role exists in the user's tenant
+            // Use AsNoTracking to avoid tracking conflicts since we'll use RoleManager for creation
             var serviceAdminRoleName = "Service Administrator";
             var serviceAdminRole = await context.Roles
+                .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.TenantId == userTenantId && r.Name == serviceAdminRoleName, cancellationToken);
             
             if (serviceAdminRole == null)

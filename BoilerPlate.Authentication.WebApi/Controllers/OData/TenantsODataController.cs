@@ -1,5 +1,6 @@
 using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.Entities;
+using BoilerPlate.Authentication.WebApi.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Formatter;
@@ -14,7 +15,7 @@ namespace BoilerPlate.Authentication.WebApi.Controllers.OData;
 /// OData controller for Tenants
 /// Only accessible by Service Administrators (Tenant Administrators cannot access tenants)
 /// </summary>
-[Authorize(Roles = "Service Administrator")]
+[Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
 [Route("odata")]
 [ODataRouteComponent("odata")]
 public class TenantsODataController : ODataController

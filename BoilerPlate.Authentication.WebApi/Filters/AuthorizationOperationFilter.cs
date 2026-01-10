@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.WebApi.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -48,6 +49,17 @@ public class AuthorizationOperationFilter : IOperationFilter
                 .Distinct()
                 .ToList();
 
+            // Map policy names to human-readable role descriptions
+            var policyRoleMap = new Dictionary<string, string>
+            {
+                { AuthorizationPolicies.ServiceAdministrator, "Service Administrator" },
+                { AuthorizationPolicies.TenantAdministrator, "Tenant Administrator" },
+                { AuthorizationPolicies.UserAdministrator, "User Administrator" },
+                { AuthorizationPolicies.UserManagement, "Service Administrator, Tenant Administrator, or User Administrator" },
+                { AuthorizationPolicies.RoleManagement, "Service Administrator or Tenant Administrator" },
+                { AuthorizationPolicies.ODataAccess, "Service Administrator or Tenant Administrator" }
+            };
+
             // Build description for required permissions
             var permissionDescription = new List<string>();
             if (roles.Any())
@@ -56,7 +68,42 @@ public class AuthorizationOperationFilter : IOperationFilter
             }
             if (policies.Any())
             {
-                permissionDescription.Add($"Required Policies: {string.Join(", ", policies)}");
+                var policyDescriptions = policies.Select(p => 
+                    policyRoleMap.TryGetValue(p, out var description) 
+                        ? $"{p} ({description})" 
+                        : p).ToList();
+                permissionDescription.Add($"Required Policies: {string.Join(", ", policyDescriptions)}");
+                
+                // Extract roles from policies for Swagger security requirements
+                foreach (var policy in policies)
+                {
+                    if (policy == AuthorizationPolicies.ServiceAdministrator)
+                    {
+                        roles.Add("Service Administrator");
+                    }
+                    else if (policy == AuthorizationPolicies.TenantAdministrator)
+                    {
+                        roles.Add("Tenant Administrator");
+                    }
+                    else if (policy == AuthorizationPolicies.UserAdministrator)
+                    {
+                        roles.Add("User Administrator");
+                    }
+                    else if (policy == AuthorizationPolicies.UserManagement)
+                    {
+                        roles.Add("Service Administrator");
+                        roles.Add("Tenant Administrator");
+                        roles.Add("User Administrator");
+                    }
+                    else if (policy == AuthorizationPolicies.RoleManagement || policy == AuthorizationPolicies.ODataAccess)
+                    {
+                        roles.Add("Service Administrator");
+                        roles.Add("Tenant Administrator");
+                    }
+                }
+                
+                // Remove duplicates
+                roles = roles.Distinct().ToList();
             }
 
             if (permissionDescription.Any())

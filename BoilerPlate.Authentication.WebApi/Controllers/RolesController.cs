@@ -1,5 +1,6 @@
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
+using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,12 +9,12 @@ namespace BoilerPlate.Authentication.WebApi.Controllers;
 
 /// <summary>
 /// RESTful API controller for role management
-/// Requires Tenant Administrator role and restricts operations to the user's tenant
+/// Allows Service Administrators (all tenants) or Tenant Administrators (their tenant)
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-[Authorize(Roles = "Tenant Administrator")]
+[Authorize(Policy = AuthorizationPolicies.RoleManagement)]
 public class RolesController : ControllerBase
 {
     private readonly IRoleService _roleService;

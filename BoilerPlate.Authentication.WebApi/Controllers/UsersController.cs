@@ -1,5 +1,6 @@
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
+using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,12 +10,12 @@ namespace BoilerPlate.Authentication.WebApi.Controllers;
 
 /// <summary>
 /// RESTful API controller for user management
-/// Requires Tenant Administrator or User Administrator role and restricts operations to the user's tenant
+/// Allows Service Administrators (all tenants), Tenant Administrators (their tenant), or User Administrators (their tenant)
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-[Authorize(Roles = "Tenant Administrator,User Administrator")]
+[Authorize(Policy = AuthorizationPolicies.UserManagement)]
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -33,15 +34,28 @@ public class UsersController : ControllerBase
 
     /// <summary>
     /// Gets the current user's tenant ID from JWT claims
+    /// Service Administrators will use their tenant ID from the token (cross-tenant access can be added later)
     /// </summary>
     private Guid GetCurrentTenantId()
     {
+        // Service Administrators can access user management, but for now they use their tenant ID from the token
+        // Future enhancement: Allow Service Administrators to specify a tenant ID parameter for cross-tenant management
         var tenantId = ClaimsHelper.GetTenantId(User);
         if (tenantId == null)
         {
+            // Service Administrators might not have a tenant ID, but for now we require it
+            // This can be enhanced later to allow Service Administrators to manage users across all tenants
             throw new UnauthorizedAccessException("Tenant ID not found in token claims");
         }
         return tenantId.Value;
+    }
+
+    /// <summary>
+    /// Checks if the current user is a Service Administrator
+    /// </summary>
+    private bool IsServiceAdministrator()
+    {
+        return User.IsInRole("Service Administrator");
     }
 
     /// <summary>

@@ -7,14 +7,15 @@ namespace BoilerPlate.Authentication.Database;
 
 /// <summary>
 /// Base authentication database context with Identity support using Guid IDs and multi-tenancy
+/// This is an abstract base class that must be inherited by concrete implementations
 /// </summary>
-public class BaseAuthDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
+public abstract class BaseAuthDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="BaseAuthDbContext"/> class
     /// </summary>
     /// <param name="options">The options to be used by a DbContext</param>
-    public BaseAuthDbContext(DbContextOptions<BaseAuthDbContext> options)
+    protected BaseAuthDbContext(DbContextOptions<BaseAuthDbContext> options)
         : base(options)
     {
     }

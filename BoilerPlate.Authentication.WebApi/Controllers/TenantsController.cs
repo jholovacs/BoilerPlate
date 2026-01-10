@@ -1,5 +1,6 @@
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
+using BoilerPlate.Authentication.WebApi.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,7 +13,7 @@ namespace BoilerPlate.Authentication.WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-[Authorize(Roles = "Service Administrator")]
+[Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
 public class TenantsController : ControllerBase
 {
     private readonly ITenantService _tenantService;

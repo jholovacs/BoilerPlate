@@ -37,7 +37,27 @@ public static class ServiceCollectionExtensions
         // Override private key from environment variable if provided
         var envPrivateKey = configuration["JWT_PRIVATE_KEY"];
         if (!string.IsNullOrWhiteSpace(envPrivateKey))
-        {
+        { 
+            // Check if it's base64 encoded (common in Docker environments)
+            // Base64-encoded keys won't contain "-----BEGIN" markers
+            if (!envPrivateKey.Contains("-----BEGIN"))
+            {
+                try
+                {
+                    var keyBytes = Convert.FromBase64String(envPrivateKey);
+                    envPrivateKey = System.Text.Encoding.UTF8.GetString(keyBytes);
+                }
+                catch (FormatException)
+                {
+                    // Not valid base64, treat as plain text PEM
+                    // Will be handled by newline normalization below
+                }
+            }
+            // Normalize newlines - handle both literal \n and actual newlines
+            // Also normalize Windows (\r\n) and Unix (\n) line endings
+            envPrivateKey = envPrivateKey.Replace("\\n", "\n")
+                                         .Replace("\r\n", "\n")
+                                         .Replace("\r", "\n");
             jwtSettings.PrivateKey = envPrivateKey;
         }
 
@@ -45,6 +65,24 @@ public static class ServiceCollectionExtensions
         var envPublicKey = configuration["JWT_PUBLIC_KEY"];
         if (!string.IsNullOrWhiteSpace(envPublicKey))
         {
+            // Check if it's base64 encoded
+            if (!envPublicKey.Contains("-----BEGIN"))
+            {
+                try
+                {
+                    var keyBytes = Convert.FromBase64String(envPublicKey);
+                    envPublicKey = System.Text.Encoding.UTF8.GetString(keyBytes);
+                }
+                catch (FormatException)
+                {
+                    // Not valid base64, treat as plain text PEM
+                    // Will be handled by newline normalization below
+                }
+            }
+            // Normalize newlines - handle both literal \n and actual newlines
+            envPublicKey = envPublicKey.Replace("\\n", "\n")
+                                       .Replace("\r\n", "\n")
+                                       .Replace("\r", "\n");
             jwtSettings.PublicKey = envPublicKey;
         }
 
@@ -151,17 +189,17 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds authentication database and services
+    /// Adds authentication services (IAuthenticationService, IUserService, etc.)
+    /// Note: This does NOT add the database context or Identity - those should be added separately
+    /// via AddAuthenticationDatabasePostgreSql or AddAuthenticationDatabase
     /// </summary>
     /// <param name="services">Service collection</param>
     /// <param name="configuration">Configuration</param>
     /// <returns>Service collection</returns>
     public static IServiceCollection AddAuthenticationServices(this IServiceCollection services, IConfiguration configuration)
     {
-        // Add database context
-        services.AddAuthenticationDatabase(configuration);
-
-        // Add authentication services
+        // Add authentication services (IAuthenticationService, IUserService, etc.)
+        // Do NOT call AddAuthenticationDatabase here - it should be called separately to avoid duplicate Identity registration
         services.AddAuthenticationServices();
 
         return services;

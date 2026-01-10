@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    pull_policy: never
+    container_name: postgres-auth
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: boilerplate
+      POSTGRES_PASSWORD: SecurePassword123!
+      POSTGRES_DB: BoilerPlateAuth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boilerplate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    pull_policy: never
+    container_name: rabbitmq-auth
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: SecurePassword123!
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7.0
+    pull_policy: never
+    container_name: mongodb-logs
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: SecurePassword123!
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  webapi:
+    image: boilerplate-authentication-webapi:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: BoilerPlate.Authentication.WebApi/Dockerfile
+    container_name: boilerplate-auth-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      # PostgreSQL connection (using service name in docker-compose)
+      - ConnectionStrings__PostgreSqlConnection=Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=SecurePassword123!
+      # JWT Keys (should be set via .env file or environment variables)
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
+      - JWT_EXPIRATION_MINUTES=60
+      # MongoDB connection (using service name in docker-compose)
+      - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+      # RabbitMQ connection (using service name in docker-compose)
+      - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
+      # Admin user configuration
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=AdminPassword123!
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    # Healthcheck commented out - verify manually by accessing http://localhost:8080/health
+    # The .NET image may not have curl/wget by default
+    # healthcheck:
+    #   test: ["CMD-SHELL", "exit 0"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  mongodb_data:
