@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Solution
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        dotnet-version: ['8.0.x']
+        configuration: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Restore dependencies
+      run: dotnet restore BoilerPlate.sln
+      
+    - name: Build solution (${{ matrix.configuration }})
+      run: dotnet build BoilerPlate.sln --configuration ${{ matrix.configuration }} --no-restore
+      
+    - name: Check for build warnings
+      run: |
+        if dotnet build BoilerPlate.sln --configuration ${{ matrix.configuration }} --no-restore 2>&1 | grep -i "warning"; then
+          echo "⚠️ Build completed with warnings"
+        else
+          echo "✅ Build completed without warnings"
+        fi

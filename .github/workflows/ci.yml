@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        dotnet-version: ['8.0.x']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+        
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Restore dependencies
+      run: dotnet restore BoilerPlate.sln
+      
+    - name: Build solution
+      run: dotnet build BoilerPlate.sln --configuration Release --no-restore
+      
+    - name: Run tests
+      run: |
+        dotnet test BoilerPlate.sln \
+          --configuration Release \
+          --no-build \
+          --verbosity normal \
+          --collect:"XPlat Code Coverage" \
+          --results-directory:"${{ github.workspace }}/TestResults" \
+          --logger:"trx;LogFileName=test-results.trx" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=coverage,cobertura \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute="Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute"
+          
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v3
+      with:
+        files: '${{ github.workspace }}/TestResults/**/*.trx'
+        check_name: 'Test Results (.NET)'
+        report_individual_runs: false
+        fail_on: 'test failures'
+        
+    - name: Generate coverage report
+      if: always()
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
+      with:
+        reports: '${{ github.workspace }}/TestResults/**/coverage.cobertura.xml'
+        targetdir: '${{ github.workspace }}/CoverageReport'
+        reporttypes: 'Html;Badges;JsonSummary;Cobertura;MarkdownSummary'
+        verbosity: 'Info'
+        title: 'BoilerPlate Code Coverage'
+        
+    - name: Upload coverage reports to Codecov
+      if: always()
+      uses: codecov/codecov-action@v4
+      with:
+        files: '${{ github.workspace }}/TestResults/**/coverage.cobertura.xml'
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        
+    - name: Upload test results artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ github.run_number }}
+        path: |
+          ${{ github.workspace }}/TestResults/**/*.trx
+          ${{ github.workspace }}/TestResults/**/coverage.*
+        retention-days: 30
+        
+    - name: Upload coverage report artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-${{ github.run_number }}
+        path: '${{ github.workspace }}/CoverageReport'
+        retention-days: 30
+        
+    - name: Add coverage summary to PR
+      if: github.event_name == 'pull_request' && always()
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        recreate: true
+        message: |
+          ## 📊 Code Coverage Report
+          
+          See the [workflow summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed coverage metrics.
+          
+          Coverage reports are available as workflow artifacts.
+          
+    - name: Coverage summary
+      if: always()
+      run: |
+        echo "## 📊 Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f "${{ github.workspace }}/CoverageReport/Summary.json" ]; then
+          COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.linecoverage')
+          BRANCH_COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.branchcoverage')
+          echo "### Coverage Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Line Coverage | **${COVERAGE}%** |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch Coverage | **${BRANCH_COVERAGE}%** |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 Detailed coverage reports are available in the workflow artifacts." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ Coverage summary not available." >> $GITHUB_STEP_SUMMARY
+        fi

@@ -1,0 +1,92 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        dotnet-version: ['8.0.x']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+        
+    - name: Restore dependencies
+      run: dotnet restore BoilerPlate.sln
+      
+    - name: Build solution
+      run: dotnet build BoilerPlate.sln --configuration Release --no-restore
+      
+    - name: Run tests with coverage
+      run: |
+        dotnet test BoilerPlate.sln \
+          --configuration Release \
+          --no-build \
+          --verbosity normal \
+          --collect:"XPlat Code Coverage" \
+          --results-directory:"${{ github.workspace }}/TestResults" \
+          --logger:"trx;LogFileName=test-results.trx" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=coverage,cobertura \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute="Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute"
+      
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v3
+      with:
+        files: '${{ github.workspace }}/TestResults/**/*.trx'
+        check_name: 'Unit Test Results'
+        report_individual_runs: false
+        fail_on: 'test failures'
+      
+    - name: Generate coverage report
+      if: always()
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
+      with:
+        reports: '${{ github.workspace }}/TestResults/**/coverage.cobertura.xml'
+        targetdir: '${{ github.workspace }}/CoverageReport'
+        reporttypes: 'Html;Badges;JsonSummary;Cobertura'
+        verbosity: 'Info'
+      
+    - name: Upload test results artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: '${{ github.workspace }}/TestResults'
+        retention-days: 30
+        
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: '${{ github.workspace }}/CoverageReport'
+        retention-days: 30
+        
+    - name: Coverage summary
+      if: always()
+      run: |
+        if [ -f "${{ github.workspace }}/CoverageReport/Summary.json" ]; then
+          echo "## Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.linecoverage')
+          echo "| Line Coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+          BRANCH_COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.branchcoverage')
+          echo "| Branch Coverage | ${BRANCH_COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+        fi

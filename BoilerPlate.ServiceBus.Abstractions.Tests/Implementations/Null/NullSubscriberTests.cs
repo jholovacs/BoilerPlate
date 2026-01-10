@@ -1,0 +1,144 @@
+using BoilerPlate.ServiceBus.Abstractions;
+using BoilerPlate.ServiceBus.Abstractions.Tests.TestHelpers;
+using FluentAssertions;
+using Xunit;
+
+namespace BoilerPlate.ServiceBus.Abstractions.Tests.Implementations.Null;
+
+/// <summary>
+/// Unit tests for NullTopicSubscriber and NullQueueSubscriber
+/// </summary>
+public class NullSubscriberTests
+{
+    [Fact]
+    public async Task NullTopicSubscriber_SubscribeAsync_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullTopicSubscriber<TestMessage>();
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) => Task.CompletedTask);
+
+        // Act
+        var act = async () => await subscriber.SubscribeAsync(handler, CancellationToken.None);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullTopicSubscriber_SubscribeAsync_WithFailureHandling_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullTopicSubscriber<TestMessage>();
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) => Task.CompletedTask);
+        var onPermanentFailure = new Func<TestMessage, Exception, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, ex, metadata, ct) => Task.CompletedTask);
+
+        // Act
+        var act = async () => await subscriber.SubscribeAsync(handler, maxFailureCount: 3, onPermanentFailure);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullTopicSubscriber_UnsubscribeAsync_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullTopicSubscriber<TestMessage>();
+
+        // Act
+        var act = async () => await subscriber.UnsubscribeAsync();
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullQueueSubscriber_SubscribeAsync_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullQueueSubscriber<TestMessage>();
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) => Task.CompletedTask);
+
+        // Act
+        var act = async () => await subscriber.SubscribeAsync(handler, CancellationToken.None);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullQueueSubscriber_SubscribeAsync_WithFailureHandling_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullQueueSubscriber<TestMessage>();
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) => Task.CompletedTask);
+        var onPermanentFailure = new Func<TestMessage, Exception, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, ex, metadata, ct) => Task.CompletedTask);
+
+        // Act
+        var act = async () => await subscriber.SubscribeAsync(handler, maxFailureCount: 3, onPermanentFailure);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullQueueSubscriber_UnsubscribeAsync_ShouldCompleteSuccessfully()
+    {
+        // Arrange
+        var subscriber = new NullQueueSubscriber<TestMessage>();
+
+        // Act
+        var act = async () => await subscriber.UnsubscribeAsync();
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task NullTopicSubscriber_SubscribeAsync_ShouldNotInvokeHandler()
+    {
+        // Arrange
+        var subscriber = new NullTopicSubscriber<TestMessage>();
+        var handlerInvoked = false;
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) =>
+            {
+                handlerInvoked = true;
+                return Task.CompletedTask;
+            });
+
+        // Act
+        await subscriber.SubscribeAsync(handler, CancellationToken.None);
+        await Task.Delay(50); // Give it time if handler would be invoked
+
+        // Assert
+        handlerInvoked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NullQueueSubscriber_SubscribeAsync_ShouldNotInvokeHandler()
+    {
+        // Arrange
+        var subscriber = new NullQueueSubscriber<TestMessage>();
+        var handlerInvoked = false;
+        var handler = new Func<TestMessage, IDictionary<string, object>?, CancellationToken, Task>(
+            (msg, metadata, ct) =>
+            {
+                handlerInvoked = true;
+                return Task.CompletedTask;
+            });
+
+        // Act
+        await subscriber.SubscribeAsync(handler, CancellationToken.None);
+        await Task.Delay(50); // Give it time if handler would be invoked
+
+        // Assert
+        handlerInvoked.Should().BeFalse();
+    }
+}
