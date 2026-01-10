@@ -11,6 +11,7 @@ jwt-keys/
 *.crt
 *.cer
 *.pfx
+.env
 
 
 # User-specific files
