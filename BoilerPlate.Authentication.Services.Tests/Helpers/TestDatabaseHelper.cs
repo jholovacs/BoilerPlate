@@ -11,20 +11,6 @@ namespace BoilerPlate.Authentication.Services.Tests.Helpers;
 /// </summary>
 internal class TestAuthDbContext : BaseAuthDbContext
 {
-    public TestAuthDbContext(DbContextOptions<BaseAuthDbContext> options)
-        : base(options)
-    {
-    }
-    
-    /// <summary>
-    /// Constructor that accepts TestAuthDbContext options (created by AddDbContext)
-    /// This converts the options to BaseAuthDbContext options internally
-    /// </summary>
-    public TestAuthDbContext(DbContextOptions<TestAuthDbContext> testOptions)
-        : base(CreateBaseOptionsFromTestOptions(testOptions))
-    {
-    }
-    
     private static string? _databaseName;
     
     /// <summary>
@@ -36,14 +22,25 @@ internal class TestAuthDbContext : BaseAuthDbContext
     }
     
     /// <summary>
-    /// Creates BaseAuthDbContext options from TestAuthDbContext options
-    /// This is used by the service registration to provide DbContextOptions<BaseAuthDbContext>
+    /// Constructor that accepts TestAuthDbContext options (created by AddDbContext)
+    /// This converts the options to BaseAuthDbContext options internally
     /// </summary>
-    public static DbContextOptions<BaseAuthDbContext> CreateBaseOptionsFromTestOptions(DbContextOptions<TestAuthDbContext> testOptions)
+    public TestAuthDbContext(DbContextOptions<TestAuthDbContext> testOptions)
+        : base(CreateBaseOptionsFromTestOptions(testOptions))
     {
-        // Create a new options builder for BaseAuthDbContext
-        // Use the stored database name (set when configuring AddDbContext) or create a new one
+    }
+    
+    /// <summary>
+    /// Creates BaseAuthDbContext options from TestAuthDbContext options
+    /// Uses the stored database name to create compatible BaseAuthDbContext options
+    /// </summary>
+    private static DbContextOptions<BaseAuthDbContext> CreateBaseOptionsFromTestOptions(DbContextOptions<TestAuthDbContext> testOptions)
+    {
+        // Use the stored database name that was set when configuring AddDbContext
+        // This ensures both TestAuthDbContext and BaseAuthDbContext use the same in-memory database
         var databaseName = _databaseName ?? Guid.NewGuid().ToString();
+        
+        // Create a new options builder for BaseAuthDbContext with the same database name
         var builder = new DbContextOptionsBuilder<BaseAuthDbContext>();
         builder.UseInMemoryDatabase(databaseName);
         
@@ -78,10 +75,11 @@ public static class TestDatabaseHelper
         services.AddScoped<BaseAuthDbContext>(sp => sp.GetRequiredService<TestAuthDbContext>());
         
         // Register DbContextOptions<BaseAuthDbContext> for any code that needs it
-        // Since we're using the same database name, both contexts will use the same in-memory database
+        // This creates options compatible with BaseAuthDbContext using the same database name
         services.AddScoped<DbContextOptions<BaseAuthDbContext>>(sp =>
         {
             // Create BaseAuthDbContext options using the stored database name
+            // This ensures both TestAuthDbContext and BaseAuthDbContext use the same in-memory database
             var optionsBuilder = new DbContextOptionsBuilder<BaseAuthDbContext>();
             optionsBuilder.UseInMemoryDatabase(databaseName);
             return optionsBuilder.Options;
