@@ -3,12 +3,12 @@ using System.Security.Cryptography;
 namespace BoilerPlate.Authentication.WebApi.Utilities;
 
 /// <summary>
-/// Utility class for generating RSA key pairs for JWT signing
+///     Utility class for generating RSA key pairs for JWT signing
 /// </summary>
 public static class RsaKeyGenerator
 {
     /// <summary>
-    /// Generates a new RSA key pair and returns them in PEM format
+    ///     Generates a new RSA key pair and returns them in PEM format
     /// </summary>
     /// <param name="keySize">Key size in bits (2048 or 4096 recommended)</param>
     /// <returns>Tuple containing private key and public key in PEM format</returns>
@@ -24,7 +24,7 @@ public static class RsaKeyGenerator
     }
 
     /// <summary>
-    /// Generates a new RSA key pair and writes them to console (for development)
+    ///     Generates a new RSA key pair and writes them to console (for development)
     /// </summary>
     /// <param name="keySize">Key size in bits</param>
     public static void GenerateAndPrintKeyPair(int keySize = 2048)

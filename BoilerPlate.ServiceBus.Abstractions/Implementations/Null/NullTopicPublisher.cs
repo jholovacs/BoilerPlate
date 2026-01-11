@@ -1,8 +1,8 @@
 namespace BoilerPlate.ServiceBus.Abstractions;
 
 /// <summary>
-/// Null implementation of ITopicPublisher that does nothing
-/// Useful for development or when messaging is not needed
+///     Null implementation of ITopicPublisher that does nothing
+///     Useful for development or when messaging is not needed
 /// </summary>
 public class NullTopicPublisher : ITopicPublisher
 {
@@ -15,7 +15,8 @@ public class NullTopicPublisher : ITopicPublisher
     }
 
     /// <inheritdoc />
-    public Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata, CancellationToken cancellationToken = default)
+    public Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata,
+        CancellationToken cancellationToken = default)
         where TMessage : class, IMessage, new()
     {
         // No-op: do nothing

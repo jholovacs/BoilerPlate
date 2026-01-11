@@ -1,17 +1,17 @@
 using BoilerPlate.Authentication.WebApi.Models;
 using FluentAssertions;
-using Xunit;
 
 namespace BoilerPlate.Authentication.WebApi.Tests.Models;
 
 /// <summary>
-/// Unit tests for OAuthTokenResponse
+///     Unit tests for OAuthTokenResponse
 /// </summary>
 public class OAuthTokenResponseTests
 {
     /// <summary>
-    /// Test case: OAuthTokenResponse should have all required properties for OAuth2 token response.
-    /// Scenario: An OAuthTokenResponse instance is created with all properties set to test values. All properties (AccessToken, TokenType, ExpiresIn, RefreshToken, Scope) should be accessible and retain their assigned values.
+    ///     Test case: OAuthTokenResponse should have all required properties for OAuth2 token response.
+    ///     Scenario: An OAuthTokenResponse instance is created with all properties set to test values. All properties
+    ///     (AccessToken, TokenType, ExpiresIn, RefreshToken, Scope) should be accessible and retain their assigned values.
     /// </summary>
     [Fact]
     public void OAuthTokenResponse_ShouldHaveAllProperties()
@@ -35,8 +35,10 @@ public class OAuthTokenResponseTests
     }
 
     /// <summary>
-    /// Test case: OAuthTokenResponse should allow null values for optional properties (RefreshToken and Scope).
-    /// Scenario: An OAuthTokenResponse instance is created with null values for RefreshToken and Scope. These properties should accept null values as they are optional in the OAuth2 specification, allowing responses without refresh tokens or scopes.
+    ///     Test case: OAuthTokenResponse should allow null values for optional properties (RefreshToken and Scope).
+    ///     Scenario: An OAuthTokenResponse instance is created with null values for RefreshToken and Scope. These properties
+    ///     should accept null values as they are optional in the OAuth2 specification, allowing responses without refresh
+    ///     tokens or scopes.
     /// </summary>
     [Fact]
     public void OAuthTokenResponse_ShouldAllowNullRefreshToken()

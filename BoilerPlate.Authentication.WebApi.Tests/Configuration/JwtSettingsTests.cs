@@ -1,17 +1,17 @@
 using BoilerPlate.Authentication.WebApi.Configuration;
 using FluentAssertions;
-using Xunit;
 
 namespace BoilerPlate.Authentication.WebApi.Tests.Configuration;
 
 /// <summary>
-/// Unit tests for JwtSettings
+///     Unit tests for JwtSettings
 /// </summary>
 public class JwtSettingsTests
 {
     /// <summary>
-    /// Test case: JwtSettings.SectionName should return the correct configuration section name.
-    /// Scenario: The SectionName constant is accessed. It should return "JwtSettings" which is used for binding configuration from appsettings.json.
+    ///     Test case: JwtSettings.SectionName should return the correct configuration section name.
+    ///     Scenario: The SectionName constant is accessed. It should return "JwtSettings" which is used for binding
+    ///     configuration from appsettings.json.
     /// </summary>
     [Fact]
     public void JwtSettings_SectionName_ShouldBeCorrect()
@@ -21,8 +21,10 @@ public class JwtSettingsTests
     }
 
     /// <summary>
-    /// Test case: JwtSettings should have appropriate default values when instantiated without parameters.
-    /// Scenario: A new JwtSettings instance is created using the default constructor. All properties should have their default values: empty strings for Issuer and Audience, 15 minutes for ExpirationMinutes, 7 days for RefreshTokenExpirationDays, and null for key-related properties.
+    ///     Test case: JwtSettings should have appropriate default values when instantiated without parameters.
+    ///     Scenario: A new JwtSettings instance is created using the default constructor. All properties should have their
+    ///     default values: empty strings for Issuer and Audience, 15 minutes for ExpirationMinutes, 7 days for
+    ///     RefreshTokenExpirationDays, and null for key-related properties.
     /// </summary>
     [Fact]
     public void JwtSettings_ShouldHaveDefaultValues()
@@ -41,8 +43,9 @@ public class JwtSettingsTests
     }
 
     /// <summary>
-    /// Test case: JwtSettings should allow all properties to be set to custom values.
-    /// Scenario: A new JwtSettings instance is created and all properties are set to test values. All properties should retain the assigned values, confirming that the settings class supports full configuration customization.
+    ///     Test case: JwtSettings should allow all properties to be set to custom values.
+    ///     Scenario: A new JwtSettings instance is created and all properties are set to test values. All properties should
+    ///     retain the assigned values, confirming that the settings class supports full configuration customization.
     /// </summary>
     [Fact]
     public void JwtSettings_ShouldAllowSettingAllProperties()

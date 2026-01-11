@@ -1,12 +1,10 @@
-using BoilerPlate.ServiceBus.Abstractions;
 using BoilerPlate.ServiceBus.Abstractions.Tests.TestHelpers;
 using FluentAssertions;
-using Xunit;
 
 namespace BoilerPlate.ServiceBus.Abstractions.Tests.Implementations.Null;
 
 /// <summary>
-/// Unit tests for NullQueuePublisher
+///     Unit tests for NullQueuePublisher
 /// </summary>
 public class NullQueuePublisherTests
 {
@@ -18,10 +16,10 @@ public class NullQueuePublisherTests
     }
 
     /// <summary>
-    /// Tests that NullQueuePublisher.PublishAsync completes successfully without throwing exceptions.
-    /// Verifies that:
-    /// - The method executes without errors (no-op implementation)
-    /// - Messages can be "published" without actually being sent anywhere
+    ///     Tests that NullQueuePublisher.PublishAsync completes successfully without throwing exceptions.
+    ///     Verifies that:
+    ///     - The method executes without errors (no-op implementation)
+    ///     - Messages can be "published" without actually being sent anywhere
     /// </summary>
     [Fact]
     public async Task PublishAsync_WithMessage_ShouldCompleteSuccessfully()
@@ -42,10 +40,10 @@ public class NullQueuePublisherTests
     }
 
     /// <summary>
-    /// Tests that NullQueuePublisher.PublishAsync accepts messages with metadata and completes successfully.
-    /// Verifies that:
-    /// - The method accepts both message and metadata parameters
-    /// - The method executes without errors (no-op implementation)
+    ///     Tests that NullQueuePublisher.PublishAsync accepts messages with metadata and completes successfully.
+    ///     Verifies that:
+    ///     - The method accepts both message and metadata parameters
+    ///     - The method executes without errors (no-op implementation)
     /// </summary>
     [Fact]
     public async Task PublishAsync_WithMessageAndMetadata_ShouldCompleteSuccessfully()
@@ -62,10 +60,10 @@ public class NullQueuePublisherTests
     }
 
     /// <summary>
-    /// Tests that NullQueuePublisher.PublishAsync returns Task.CompletedTask immediately.
-    /// Verifies that:
-    /// - The returned task is already completed
-    /// - No actual work is performed (instant return)
+    ///     Tests that NullQueuePublisher.PublishAsync returns Task.CompletedTask immediately.
+    ///     Verifies that:
+    ///     - The returned task is already completed
+    ///     - No actual work is performed (instant return)
     /// </summary>
     [Fact]
     public async Task PublishAsync_WithMessage_ShouldReturnCompletedTask()
@@ -82,10 +80,10 @@ public class NullQueuePublisherTests
     }
 
     /// <summary>
-    /// Tests that NullQueuePublisher.PublishAsync with metadata returns Task.CompletedTask immediately.
-    /// Verifies that:
-    /// - The returned task is already completed even with metadata
-    /// - No actual work is performed (instant return)
+    ///     Tests that NullQueuePublisher.PublishAsync with metadata returns Task.CompletedTask immediately.
+    ///     Verifies that:
+    ///     - The returned task is already completed even with metadata
+    ///     - No actual work is performed (instant return)
     /// </summary>
     [Fact]
     public async Task PublishAsync_WithMessageAndMetadata_ShouldReturnCompletedTask()
@@ -103,10 +101,10 @@ public class NullQueuePublisherTests
     }
 
     /// <summary>
-    /// Tests that NullQueuePublisher.PublishAsync handles cancelled cancellation tokens gracefully.
-    /// Verifies that:
-    /// - Cancelled tokens do not cause exceptions
-    /// - The method completes successfully even when cancellation is requested (no-op behavior)
+    ///     Tests that NullQueuePublisher.PublishAsync handles cancelled cancellation tokens gracefully.
+    ///     Verifies that:
+    ///     - Cancelled tokens do not cause exceptions
+    ///     - The method completes successfully even when cancellation is requested (no-op behavior)
     /// </summary>
     [Fact]
     public async Task PublishAsync_WithCancellationToken_ShouldNotThrow()

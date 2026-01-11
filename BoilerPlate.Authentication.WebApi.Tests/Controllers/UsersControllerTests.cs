@@ -1,43 +1,47 @@
-using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
+using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Controllers;
-using BoilerPlate.Authentication.WebApi.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using System.Security.Claims;
-using Xunit;
 
 namespace BoilerPlate.Authentication.WebApi.Tests.Controllers;
 
 /// <summary>
-/// Unit tests for UsersController
+///     Unit tests for UsersController
 /// </summary>
 public class UsersControllerTests
 {
-    private readonly Mock<IUserService> _userServiceMock;
-    private readonly Mock<ILogger<UsersController>> _loggerMock;
+    private readonly Mock<IAuthenticationService> _authenticationServiceMock;
+    private readonly Mock<BaseAuthDbContext> _contextMock;
     private readonly UsersController _controller;
+    private readonly Mock<ILogger<UsersController>> _loggerMock;
+    private readonly Mock<IUserService> _userServiceMock;
 
     public UsersControllerTests()
     {
         _userServiceMock = new Mock<IUserService>();
+        _authenticationServiceMock = new Mock<IAuthenticationService>();
+        _contextMock = new Mock<BaseAuthDbContext>();
         _loggerMock = new Mock<ILogger<UsersController>>();
 
         _controller = new UsersController(
             _userServiceMock.Object,
+            _authenticationServiceMock.Object,
+            _contextMock.Object,
             _loggerMock.Object);
     }
 
     #region Authorization Attribute Tests
 
     /// <summary>
-    /// Test case: UsersController should have an AuthorizeAttribute with the UserManagementPolicy.
-    /// Scenario: The UsersController class is inspected for the AuthorizeAttribute. The controller should have the attribute applied with the UserManagementPolicy, ensuring that only users with appropriate roles (Service Administrator, Tenant Administrator, or User Administrator) can access user management endpoints.
+    ///     Test case: UsersController should have an AuthorizeAttribute with the UserManagementPolicy.
+    ///     Scenario: The UsersController class is inspected for the AuthorizeAttribute. The controller should have the
+    ///     attribute applied with the UserManagementPolicy, ensuring that only users with appropriate roles (Service
+    ///     Administrator, Tenant Administrator, or User Administrator) can access user management endpoints.
     /// </summary>
     [Fact]
     public void UsersController_ShouldHaveAuthorizeAttribute()
@@ -53,8 +57,10 @@ public class UsersControllerTests
     }
 
     /// <summary>
-    /// Test case: UsersController should have an ApiControllerAttribute applied.
-    /// Scenario: The UsersController class is inspected for the ApiControllerAttribute. The controller should have the attribute applied, which enables automatic model validation, binding source parameter inference, and other ASP.NET Core Web API conventions.
+    ///     Test case: UsersController should have an ApiControllerAttribute applied.
+    ///     Scenario: The UsersController class is inspected for the ApiControllerAttribute. The controller should have the
+    ///     attribute applied, which enables automatic model validation, binding source parameter inference, and other ASP.NET
+    ///     Core Web API conventions.
     /// </summary>
     [Fact]
     public void UsersController_ShouldHaveApiControllerAttribute()
@@ -69,8 +75,10 @@ public class UsersControllerTests
     }
 
     /// <summary>
-    /// Test case: UsersController should have a RouteAttribute with the template "api/[controller]".
-    /// Scenario: The UsersController class is inspected for the RouteAttribute. The controller should have the attribute applied with the template "api/[controller]", which will resolve to "api/users" for routing purposes, following RESTful API conventions.
+    ///     Test case: UsersController should have a RouteAttribute with the template "api/[controller]".
+    ///     Scenario: The UsersController class is inspected for the RouteAttribute. The controller should have the attribute
+    ///     applied with the template "api/[controller]", which will resolve to "api/users" for routing purposes, following
+    ///     RESTful API conventions.
     /// </summary>
     [Fact]
     public void UsersController_ShouldHaveRouteAttribute()

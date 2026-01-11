@@ -4,14 +4,14 @@ using BoilerPlate.ServiceBus.RabbitMq.Helpers;
 namespace BoilerPlate.ServiceBus.RabbitMq.Resolvers;
 
 /// <summary>
-/// RabbitMQ-specific topic name resolver that ensures names are valid for RabbitMQ
+///     RabbitMQ-specific topic name resolver that ensures names are valid for RabbitMQ
 /// </summary>
 public class RabbitMqTopicNameResolver : ITopicNameResolver
 {
     private readonly ITopicNameResolver _baseResolver;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RabbitMqTopicNameResolver"/> class
+    ///     Initializes a new instance of the <see cref="RabbitMqTopicNameResolver" /> class
     /// </summary>
     /// <param name="baseResolver">The base topic name resolver to use</param>
     public RabbitMqTopicNameResolver(ITopicNameResolver baseResolver)

@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoilerPlate.ServiceBus.Abst
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoilerPlate.Authentication.WebApi.Tests", "BoilerPlate.Authentication.WebApi.Tests\BoilerPlate.Authentication.WebApi.Tests.csproj", "{B430C7BB-E86E-4678-97FC-D58B38844DD5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BoilerPlate.Services.Audit", "BoilerPlate.Services.Audit\BoilerPlate.Services.Audit.csproj", "{96E70E5E-1F13-44AC-BA48-DE30EB809423}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -189,6 +191,18 @@ Global
 		{B430C7BB-E86E-4678-97FC-D58B38844DD5}.Release|x64.Build.0 = Release|Any CPU
 		{B430C7BB-E86E-4678-97FC-D58B38844DD5}.Release|x86.ActiveCfg = Release|Any CPU
 		{B430C7BB-E86E-4678-97FC-D58B38844DD5}.Release|x86.Build.0 = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|x64.Build.0 = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Debug|x86.Build.0 = Debug|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|x64.ActiveCfg = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|x64.Build.0 = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|x86.ActiveCfg = Release|Any CPU
+		{96E70E5E-1F13-44AC-BA48-DE30EB809423}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,9 +1,7 @@
-using BoilerPlate.ServiceBus.Abstractions;
-
 namespace BoilerPlate.ServiceBus.Abstractions.Tests.TestHelpers;
 
 /// <summary>
-/// Test message types for unit tests
+///     Test message types for unit tests
 /// </summary>
 internal class UserCreatedEvent : IMessage
 {

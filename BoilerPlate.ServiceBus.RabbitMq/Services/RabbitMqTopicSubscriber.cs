@@ -1,29 +1,29 @@
+using System.Text;
+using System.Text.Json;
 using BoilerPlate.ServiceBus.Abstractions;
 using BoilerPlate.ServiceBus.RabbitMq.Connection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
-using System.Text.Json;
 
 namespace BoilerPlate.ServiceBus.RabbitMq.Services;
 
 /// <summary>
-/// RabbitMQ implementation of ITopicSubscriber
+///     RabbitMQ implementation of ITopicSubscriber
 /// </summary>
 public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDisposable
     where TMessage : class, IMessage
 {
     private readonly RabbitMqConnectionManager _connectionManager;
-    private readonly ITopicNameResolver _topicNameResolver;
-    private readonly ILogger<RabbitMqTopicSubscriber<TMessage>> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly ILogger<RabbitMqTopicSubscriber<TMessage>> _logger;
+    private readonly ITopicNameResolver _topicNameResolver;
     private IModel? _channel;
     private string? _consumerTag;
-    private bool _disposed = false;
+    private bool _disposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RabbitMqTopicSubscriber{TMessage}"/> class
+    ///     Initializes a new instance of the <see cref="RabbitMqTopicSubscriber{TMessage}" /> class
     /// </summary>
     public RabbitMqTopicSubscriber(
         RabbitMqConnectionManager connectionManager,
@@ -40,8 +40,20 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         };
     }
 
+    /// <summary>
+    ///     Disposes the subscriber
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        UnsubscribeAsync().GetAwaiter().GetResult();
+        _disposed = true;
+    }
+
     /// <inheritdoc />
-    public Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler, CancellationToken cancellationToken = default)
+    public Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler,
+        CancellationToken cancellationToken = default)
     {
         return SubscribeAsync(handler, 3, null, cancellationToken);
     }
@@ -53,10 +65,7 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         Func<TMessage, Exception, IDictionary<string, object>?, CancellationToken, Task>? onPermanentFailure = null,
         CancellationToken cancellationToken = default)
     {
-        if (_channel != null)
-        {
-            throw new InvalidOperationException("Already subscribed. Call UnsubscribeAsync first.");
-        }
+        if (_channel != null) throw new InvalidOperationException("Already subscribed. Call UnsubscribeAsync first.");
 
         try
         {
@@ -65,24 +74,24 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
 
             // Declare exchange (topic exchange)
             _channel.ExchangeDeclare(
-                exchange: topicName,
-                type: ExchangeType.Topic,
-                durable: true,
-                autoDelete: false);
+                topicName,
+                ExchangeType.Topic,
+                true,
+                false);
 
             // Declare queue (unique per consumer instance)
             var queueName = $"{topicName}.{Guid.NewGuid():N}";
             _channel.QueueDeclare(
-                queue: queueName,
-                durable: false,
-                exclusive: true,
-                autoDelete: true);
+                queueName,
+                false,
+                true,
+                true);
 
             // Bind queue to exchange
             _channel.QueueBind(
-                queue: queueName,
-                exchange: topicName,
-                routingKey: "#");
+                queueName,
+                topicName,
+                "#");
 
             // Create consumer
             var consumer = new EventingBasicConsumer(_channel);
@@ -92,9 +101,9 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
             };
 
             _consumerTag = _channel.BasicConsume(
-                queue: queueName,
-                autoAck: false,
-                consumer: consumer);
+                queueName,
+                false,
+                consumer);
 
             _logger.LogInformation(
                 "Subscribed to topic {TopicName}. Queue: {QueueName}, ConsumerTag: {ConsumerTag}",
@@ -104,7 +113,8 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to subscribe to topic {TopicName}", _topicNameResolver.ResolveTopicName<TMessage>());
+            _logger.LogError(ex, "Failed to subscribe to topic {TopicName}",
+                _topicNameResolver.ResolveTopicName<TMessage>());
             _channel?.Close();
             _channel?.Dispose();
             _channel = null;
@@ -118,7 +128,6 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
     public Task UnsubscribeAsync(CancellationToken cancellationToken = default)
     {
         if (_channel != null && _consumerTag != null)
-        {
             try
             {
                 _channel.BasicCancel(_consumerTag);
@@ -135,7 +144,6 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
                 _channel = null;
                 _consumerTag = null;
             }
-        }
 
         return Task.CompletedTask;
     }
@@ -168,27 +176,16 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
             if (ea.BasicProperties.Headers != null)
             {
                 if (ea.BasicProperties.Headers.TryGetValue("TraceId", out var traceIdObj))
-                {
                     message.TraceId = traceIdObj?.ToString();
-                }
                 if (ea.BasicProperties.Headers.TryGetValue("ReferenceId", out var refIdObj))
-                {
                     message.ReferenceId = refIdObj?.ToString();
-                }
                 if (ea.BasicProperties.Headers.TryGetValue("CreatedTimestamp", out var timestampObj))
-                {
                     if (DateTime.TryParse(timestampObj?.ToString(), out var timestamp))
-                    {
                         message.CreatedTimestamp = timestamp;
-                    }
-                }
+
                 if (ea.BasicProperties.Headers.TryGetValue("FailureCount", out var failureCountObj))
-                {
                     if (int.TryParse(failureCountObj?.ToString(), out var failureCount))
-                    {
                         message.FailureCount = failureCount;
-                    }
-                }
             }
 
             // Convert headers to metadata dictionary
@@ -235,19 +232,5 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
             _logger.LogError(ex, "Error processing message from topic");
             _channel?.BasicNack(ea.DeliveryTag, false, false);
         }
-    }
-
-    /// <summary>
-    /// Disposes the subscriber
-    /// </summary>
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        UnsubscribeAsync().GetAwaiter().GetResult();
-        _disposed = true;
     }
 }

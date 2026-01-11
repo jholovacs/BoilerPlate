@@ -1,12 +1,10 @@
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace BoilerPlate.Authentication.WebApi.Filters;
 
 /// <summary>
-/// Swagger document filter to include OData endpoints in the API documentation
+///     Swagger document filter to include OData endpoints in the API documentation
 /// </summary>
 public class ODataDocumentFilter : IDocumentFilter
 {
@@ -15,22 +13,17 @@ public class ODataDocumentFilter : IDocumentFilter
     {
         // OData endpoints are already included via controllers
         // This filter can be used to add additional OData-specific documentation if needed
-        
+
         // Add OData query parameter documentation to relevant paths
         foreach (var path in swaggerDoc.Paths)
-        {
             if (path.Key.Contains("/odata/", StringComparison.OrdinalIgnoreCase))
-            {
                 // Add OData query parameters to GET operations
-                foreach (var operation in path.Value.Operations.Where(o => o.Key == Microsoft.OpenApi.Models.OperationType.Get))
+                foreach (var operation in path.Value.Operations.Where(o => o.Key == OperationType.Get))
                 {
                     var op = operation.Value;
-                    
+
                     // Add OData query parameters if not already present
-                    if (op.Parameters == null)
-                    {
-                        op.Parameters = new List<OpenApiParameter>();
-                    }
+                    if (op.Parameters == null) op.Parameters = new List<OpenApiParameter>();
 
                     // Add common OData query parameters
                     var odataParams = new[]
@@ -95,24 +88,16 @@ public class ODataDocumentFilter : IDocumentFilter
 
                     // Only add if not already present
                     foreach (var param in odataParams)
-                    {
                         if (!op.Parameters.Any(p => p.Name == param.Name))
-                        {
                             op.Parameters.Add(param);
-                        }
-                    }
 
                     // Update description to mention OData support
                     if (!string.IsNullOrEmpty(op.Description))
-                    {
-                        op.Description += "\n\n**OData Query Support:** This endpoint supports OData query options ($select, $filter, $orderby, $top, $skip, $expand, $count).";
-                    }
+                        op.Description +=
+                            "\n\n**OData Query Support:** This endpoint supports OData query options ($select, $filter, $orderby, $top, $skip, $expand, $count).";
                     else
-                    {
-                        op.Description = "**OData Query Support:** This endpoint supports OData query options ($select, $filter, $orderby, $top, $skip, $expand, $count).";
-                    }
+                        op.Description =
+                            "**OData Query Support:** This endpoint supports OData query options ($select, $filter, $orderby, $top, $skip, $expand, $count).";
                 }
-            }
-        }
     }
 }

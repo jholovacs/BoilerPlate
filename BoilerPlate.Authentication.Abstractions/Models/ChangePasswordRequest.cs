@@ -1,27 +1,27 @@
 namespace BoilerPlate.Authentication.Abstractions.Models;
 
 /// <summary>
-/// Request model for changing user password
+///     Request model for changing user password
 /// </summary>
 public class ChangePasswordRequest
 {
     /// <summary>
-    /// Tenant ID (UUID) - required for multi-tenancy
+    ///     Tenant ID (UUID) - required for multi-tenancy
     /// </summary>
     public required Guid TenantId { get; set; }
 
     /// <summary>
-    /// Current password
+    ///     Current password
     /// </summary>
     public required string CurrentPassword { get; set; }
 
     /// <summary>
-    /// New password
+    ///     New password
     /// </summary>
     public required string NewPassword { get; set; }
 
     /// <summary>
-    /// Confirm new password
+    ///     Confirm new password
     /// </summary>
     public required string ConfirmNewPassword { get; set; }
 }

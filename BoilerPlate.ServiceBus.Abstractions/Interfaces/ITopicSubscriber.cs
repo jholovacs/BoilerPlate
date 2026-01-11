@@ -1,35 +1,40 @@
 namespace BoilerPlate.ServiceBus.Abstractions;
 
 /// <summary>
-/// Generic interface for subscribing to messages from a topic
-/// The topic is determined by the message type
+///     Generic interface for subscribing to messages from a topic
+///     The topic is determined by the message type
 /// </summary>
 /// <typeparam name="TMessage">The type of message to subscribe to</typeparam>
 public interface ITopicSubscriber<out TMessage>
     where TMessage : class, IMessage
 {
     /// <summary>
-    /// Subscribes to messages from the topic associated with the message type
+    ///     Subscribes to messages from the topic associated with the message type
     /// </summary>
     /// <param name="handler">The handler function to process received messages</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the asynchronous subscription operation</returns>
-    Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler, CancellationToken cancellationToken = default);
+    Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Subscribes to messages from the topic with failure handling
+    ///     Subscribes to messages from the topic with failure handling
     /// </summary>
     /// <param name="handler">The handler function to process received messages</param>
     /// <param name="maxFailureCount">Maximum number of failures allowed before permanently failing the message (default: 3)</param>
-    /// <param name="onPermanentFailure">Optional callback invoked when a message permanently fails (after maxFailureCount exceeded)</param>
+    /// <param name="onPermanentFailure">
+    ///     Optional callback invoked when a message permanently fails (after maxFailureCount
+    ///     exceeded)
+    /// </param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the asynchronous subscription operation</returns>
     /// <remarks>
-    /// The subscriber implementation should:
-    /// 1. Catch exceptions thrown by the handler
-    /// 2. Increment the message's FailureCount property
-    /// 3. If FailureCount exceeds maxFailureCount, invoke onPermanentFailure (if provided), log an error, and destroy the message
-    /// 4. If FailureCount is within limits, the message will be retried (implementation-specific behavior)
+    ///     The subscriber implementation should:
+    ///     1. Catch exceptions thrown by the handler
+    ///     2. Increment the message's FailureCount property
+    ///     3. If FailureCount exceeds maxFailureCount, invoke onPermanentFailure (if provided), log an error, and destroy the
+    ///     message
+    ///     4. If FailureCount is within limits, the message will be retried (implementation-specific behavior)
     /// </remarks>
     Task SubscribeAsync(
         Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler,
@@ -38,7 +43,7 @@ public interface ITopicSubscriber<out TMessage>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Unsubscribes from the topic
+    ///     Unsubscribes from the topic
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the asynchronous unsubscription operation</returns>

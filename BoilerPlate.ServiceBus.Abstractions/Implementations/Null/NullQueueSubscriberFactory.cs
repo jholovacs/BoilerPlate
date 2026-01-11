@@ -1,8 +1,8 @@
 namespace BoilerPlate.ServiceBus.Abstractions;
 
 /// <summary>
-/// Null implementation of IQueueSubscriberFactory that creates no-op subscribers
-/// Useful for development or when messaging is not needed
+///     Null implementation of IQueueSubscriberFactory that creates no-op subscribers
+///     Useful for development or when messaging is not needed
 /// </summary>
 public class NullQueueSubscriberFactory : IQueueSubscriberFactory
 {

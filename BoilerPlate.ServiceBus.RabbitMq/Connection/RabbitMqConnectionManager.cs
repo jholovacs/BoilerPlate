@@ -2,23 +2,22 @@ using BoilerPlate.ServiceBus.RabbitMq.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using System.Text;
 
 namespace BoilerPlate.ServiceBus.RabbitMq.Connection;
 
 /// <summary>
-/// Manages RabbitMQ connections and channels
+///     Manages RabbitMQ connections and channels
 /// </summary>
 public class RabbitMqConnectionManager : IDisposable
 {
-    private readonly RabbitMqOptions _options;
-    private readonly ILogger<RabbitMqConnectionManager> _logger;
-    private IConnection? _connection;
     private readonly object _lock = new();
-    private bool _disposed = false;
+    private readonly ILogger<RabbitMqConnectionManager> _logger;
+    private readonly RabbitMqOptions _options;
+    private IConnection? _connection;
+    private bool _disposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RabbitMqConnectionManager"/> class
+    ///     Initializes a new instance of the <see cref="RabbitMqConnectionManager" /> class
     /// </summary>
     public RabbitMqConnectionManager(
         IOptions<RabbitMqOptions> options,
@@ -28,22 +27,31 @@ public class RabbitMqConnectionManager : IDisposable
         _logger = logger;
     }
 
-    /// <summary>
-    /// Gets or creates a connection to RabbitMQ
-    /// </summary>
-    public IConnection GetConnection()
+    /// <inheritdoc />
+    public void Dispose()
     {
-        if (_connection?.IsOpen == true)
-        {
-            return _connection;
-        }
+        if (_disposed) return;
 
         lock (_lock)
         {
-            if (_connection?.IsOpen == true)
-            {
-                return _connection;
-            }
+            if (_disposed) return;
+
+            _connection?.Close();
+            _connection?.Dispose();
+            _disposed = true;
+        }
+    }
+
+    /// <summary>
+    ///     Gets or creates a connection to RabbitMQ
+    /// </summary>
+    public IConnection GetConnection()
+    {
+        if (_connection?.IsOpen == true) return _connection;
+
+        lock (_lock)
+        {
+            if (_connection?.IsOpen == true) return _connection;
 
             try
             {
@@ -69,7 +77,7 @@ public class RabbitMqConnectionManager : IDisposable
     }
 
     /// <summary>
-    /// Creates a new channel
+    ///     Creates a new channel
     /// </summary>
     public IModel CreateChannel()
     {
@@ -79,46 +87,20 @@ public class RabbitMqConnectionManager : IDisposable
     }
 
     /// <summary>
-    /// Gets the connection string from environment variable or configuration
+    ///     Gets the connection string from environment variable or configuration
     /// </summary>
     private string GetConnectionString()
     {
         // Check environment variable first
         var envConnectionString = Environment.GetEnvironmentVariable("RABBITMQ_CONNECTION_STRING");
-        if (!string.IsNullOrWhiteSpace(envConnectionString))
-        {
-            return envConnectionString;
-        }
+        if (!string.IsNullOrWhiteSpace(envConnectionString)) return envConnectionString;
 
         // Fall back to configuration
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-        {
             throw new InvalidOperationException(
                 "RabbitMQ connection string must be provided via RABBITMQ_CONNECTION_STRING environment variable " +
                 "or RabbitMq:ConnectionString configuration");
-        }
 
         return _options.ConnectionString;
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        lock (_lock)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _connection?.Close();
-            _connection?.Dispose();
-            _disposed = true;
-        }
     }
 }

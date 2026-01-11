@@ -1,0 +1,1042 @@
+{
+	"info": {
+		"_postman_id": "boilerplate-auth-api-collection",
+		"name": "BoilerPlate Authentication API - Tenant & User Management",
+		"description": "Complete workflow testing for tenant and user management:\n1. Service Administrator authenticates and gets token\n2. Service Administrator creates a new tenant\n3. Service Administrator creates a user in the new tenant\n4. Service Administrator assigns Tenant Administrator role to that user\n5. Tenant Administrator authenticates and gets their token\n6. Tenant Administrator creates a user in their tenant\n7. Verify that Tenant Administrator cannot create users in other tenants\n8. Tenant Administrator deletes the user they created\n9. Service Administrator offboards the tenant and verifies all tenant records are deleted",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Get All Tenants (to find System Tenant)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// This endpoint requires authentication, but we'll try without first",
+									"// If it fails, we'll need to authenticate with a known tenant ID",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (Array.isArray(jsonData)) {",
+									"        var systemTenant = jsonData.find(t => t.name === 'System' || t.name === 'System Tenant');",
+									"        if (systemTenant) {",
+									"            pm.collectionVariables.set(\"systemTenantId\", systemTenant.id);",
+									"        }",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants"
+							]
+						},
+						"description": "⚠️ NOTE: This will fail with 401 if not authenticated. For initial setup:\n1. If you know the System tenant ID, set it in the collection variable 'systemTenantId'\n2. Or authenticate first using a temporary method\n3. The System tenant is typically created automatically on first startup with name 'System'"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Service Admin Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set(\"serviceAdminToken\", jsonData.accessToken);",
+									"    pm.collectionVariables.set(\"serviceAdminRefreshToken\", jsonData.refreshToken);",
+									"    ",
+									"    // Extract tenant ID from JWT token (decode base64 payload)",
+									"    var tokenParts = jsonData.accessToken.split('.');",
+									"    if (tokenParts.length === 3) {",
+									"        try {",
+									"            // Add padding if needed for base64 decode",
+									"            var payloadBase64 = tokenParts[1];",
+									"            while (payloadBase64.length % 4) {",
+									"                payloadBase64 += '=';",
+									"            }",
+									"            var payload = JSON.parse(atob(payloadBase64));",
+									"            var tenantIdClaim = payload['http://schemas.microsoft.com/identity/claims/tenantid'] || payload['tenant_id'] || payload.tenantid || payload.tenant_id;",
+									"            if (tenantIdClaim) {",
+									"                pm.collectionVariables.set(\"systemTenantId\", tenantIdClaim);",
+									"            }",
+									"        } catch (e) {",
+									"            console.log('Error decoding JWT:', e);",
+									"        }",
+									"    }",
+									"}",
+									"",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has access token\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('accessToken');",
+									"    pm.expect(jsonData).to.have.property('refreshToken');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grantType\": \"password\",\n    \"username\": \"{{adminUsername}}\",\n    \"password\": \"{{adminPassword}}\",\n    \"tenantId\": \"{{systemTenantId}}\",\n    \"scope\": \"api\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/oauth/token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"oauth",
+								"token"
+							]
+						},
+						"description": "Authenticate as Service Administrator to get JWT access token.\n\n⚠️ IMPORTANT: You must set the 'systemTenantId' collection variable before running this request.\n\nTo find the System tenant ID:\n1. Check the database for a tenant named 'System' or 'System Tenant'\n2. Or run the 'Get All Tenants' request first (if you have a token)\n3. Or set it manually in Postman collection variables\n\nDefault admin credentials: admin/AdminPassword123!"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for getting JWT tokens. Note: You may need to manually set the System tenant ID in collection variables before authenticating."
+		},
+		{
+			"name": "2. Tenant Management",
+			"item": [
+				{
+					"name": "Create Tenant (Onboard)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate timestamp once and store it for use in both request and test",
+									"var timestamp = new Date().getTime();",
+									"var expectedName = 'Test Tenant ' + timestamp;",
+									"pm.collectionVariables.set('testTenantTimestamp', timestamp);",
+									"pm.collectionVariables.set('testTenantExpectedName', expectedName);",
+									"",
+									"// Set the request body dynamically to ensure the timestamp is included",
+									"var requestBody = {",
+									"    name: expectedName,",
+									"    description: 'Test tenant created for API testing'",
+									"};",
+									"pm.request.body.raw = JSON.stringify(requestBody);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('testTenantId', jsonData.id);",
+									"    pm.collectionVariables.set('testTenantName', jsonData.name);",
+									"}",
+									"",
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test('Tenant created successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var expectedName = pm.collectionVariables.get('testTenantExpectedName');",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData).to.have.property('name');",
+									"    pm.expect(jsonData.name).to.equal(expectedName);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants/onboard",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants",
+								"onboard"
+							]
+						},
+						"description": "Creates a new tenant with default roles (Tenant Administrator and User Administrator). This endpoint requires Service Administrator role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant by ID",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Tenant retrieved successfully\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData.id).to.equal(pm.collectionVariables.get('testTenantId'));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants/{{testTenantId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants",
+								"{{testTenantId}}"
+							]
+						},
+						"description": "Retrieves tenant information by ID. Requires Service Administrator role."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Tenants",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants"
+							]
+						},
+						"description": "Gets all tenants. Requires Service Administrator role."
+					},
+					"response": []
+				}
+			],
+			"description": "Tenant management endpoints (Service Administrator only)"
+		},
+		{
+			"name": "3. User Management",
+			"item": [
+				{
+					"name": "Create Tenant Administrator User",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate unique username and email for tenant admin",
+									"var timestamp = new Date().getTime();",
+									"pm.collectionVariables.set('tenantAdminUsername', 'tenantadmin' + timestamp);",
+									"pm.collectionVariables.set('tenantAdminEmail', 'tenantadmin' + timestamp + '@test.com');",
+									"pm.collectionVariables.set('tenantAdminPassword', 'SecurePass123!');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('tenantAdminUserId', jsonData.id);",
+									"}",
+									"",
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test('Tenant Administrator user created successfully', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData.email).to.equal(pm.collectionVariables.get('tenantAdminEmail'));",
+									"    pm.expect(jsonData.userName).to.equal(pm.collectionVariables.get('tenantAdminUsername'));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenantId\": \"{{testTenantId}}\",\n    \"userName\": \"{{tenantAdminUsername}}\",\n    \"email\": \"{{tenantAdminEmail}}\",\n    \"password\": \"{{tenantAdminPassword}}\",\n    \"firstName\": \"Tenant\",\n    \"lastName\": \"Administrator\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Creates a new user in the test tenant. Service Administrators can create users in any tenant by specifying the tenantId. This user will be assigned the Tenant Administrator role in the next step."
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Tenant Administrator Role",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"roles\": [\"Tenant Administrator\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{tenantAdminUserId}}/roles",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{tenantAdminUserId}}",
+								"roles"
+							]
+						},
+						"description": "Assigns the Tenant Administrator role to the newly created user. This allows them to manage users and roles within their tenant."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tenant Administrator Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('tenantAdminToken', jsonData.accessToken);",
+									"    pm.collectionVariables.set('tenantAdminRefreshToken', jsonData.refreshToken);",
+									"}",
+									"",
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has access token', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('accessToken');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"grantType\": \"password\",\n    \"username\": \"{{tenantAdminUsername}}\",\n    \"password\": \"{{tenantAdminPassword}}\",\n    \"tenantId\": \"{{testTenantId}}\",\n    \"scope\": \"api\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/oauth/token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"oauth",
+								"token"
+							]
+						},
+						"description": "Authenticates as the newly created Tenant Administrator user to get their JWT token. This token will be used for subsequent requests to test tenant-scoped user management operations."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users in Tenant (as Tenant Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Tenant Admin can see users in their tenant', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData.length).to.be.at.least(1); // At least the tenant admin user",
+									"});",
+									"",
+									"pm.test('Tenant Administrator user is in the list', function () {",
+									"    var jsonData = pm.response.json();",
+									"    var tenantAdminUserId = pm.collectionVariables.get('tenantAdminUserId');",
+									"    var tenantAdminUser = jsonData.find(u => u.id === tenantAdminUserId);",
+									"    pm.expect(tenantAdminUser).to.not.be.undefined;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{tenantAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Gets all users in the tenant using the Tenant Administrator's token. As Tenant Administrator, this user can only see users in their own tenant. Verifies that the Tenant Administrator user is in the list."
+					},
+					"response": []
+				},
+				{
+					"name": "Create User (as Tenant Admin)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Generate unique username and email for test user",
+									"var timestamp = new Date().getTime();",
+									"pm.collectionVariables.set('testUserUsername', 'testuser' + timestamp);",
+									"pm.collectionVariables.set('testUserEmail', 'testuser' + timestamp + '@test.com');",
+									"pm.collectionVariables.set('testUserPassword', 'TestPass123!');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('testUserId', jsonData.id);",
+									"}",
+									"",
+									"pm.test('Status code is 201', function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test('User created successfully by Tenant Administrator', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData.email).to.equal(pm.collectionVariables.get('testUserEmail'));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{tenantAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userName\": \"{{testUserUsername}}\",\n    \"email\": \"{{testUserEmail}}\",\n    \"password\": \"{{testUserPassword}}\",\n    \"firstName\": \"Test\",\n    \"lastName\": \"User\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Creates a new user in the tenant using the Tenant Administrator's credentials. Tenant Administrators can only create users in their own tenant (tenantId is automatically taken from the JWT token)."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Tenant Admin Cannot Create User in Other Tenant",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 403 Forbidden', function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"",
+									"pm.test('Tenant Administrator cannot create users in other tenants', function () {",
+									"    // This test verifies tenant isolation - Tenant Administrators should be restricted to their own tenant",
+									"    pm.expect(pm.response.code).to.equal(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{tenantAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tenantId\": \"{{systemTenantId}}\",\n    \"userName\": \"unauthorizeduser\",\n    \"email\": \"unauthorized@test.com\",\n    \"password\": \"TestPass123!\",\n    \"firstName\": \"Unauthorized\",\n    \"lastName\": \"User\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Attempts to create a user in a different tenant (System tenant) using the Tenant Administrator's credentials. This should fail with 403 Forbidden, verifying that Tenant Administrators can only create users in their own tenant."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User (as Tenant Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 204', function () {",
+									"    pm.response.to.have.status(204);",
+									"});",
+									"",
+									"pm.test('User deleted successfully by Tenant Administrator', function () {",
+									"    // Verify that the Tenant Administrator can delete users in their own tenant",
+									"    pm.expect(pm.response.code).to.equal(204);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{tenantAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{testUserId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{testUserId}}"
+							]
+						},
+						"description": "Deletes a user within the tenant using the Tenant Administrator's credentials. Tenant Administrators can only delete users in their own tenant."
+					},
+					"response": []
+				}
+			],
+			"description": "User management endpoints. Service Administrators can create users in any tenant. Tenant Administrators and User Administrators can only manage users in their own tenant."
+		},
+		{
+			"name": "4. Cross-Tenant Security Test",
+			"item": [
+				{
+					"name": "Get Admin User from System Tenant (Service Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (Array.isArray(jsonData) && jsonData.length > 0) {",
+									"        // Find the admin user (usually the first user in System tenant)",
+									"        var adminUser = jsonData.find(u => u.userName === pm.collectionVariables.get('adminUsername')) || jsonData[0];",
+									"        if (adminUser && adminUser.id) {",
+									"            pm.collectionVariables.set('systemTenantUserId', adminUser.id);",
+									"        }",
+									"    }",
+									"}",
+									"",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"System tenant users retrieved\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.be.an('array');",
+									"    pm.expect(jsonData.length).to.be.at.least(1);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users"
+							]
+						},
+						"description": "Gets users from System tenant using Service Admin token. This is used to get a user ID from a different tenant to test cross-tenant access restrictions."
+					},
+					"response": []
+				},
+				{
+					"name": "Attempt to Get User from System Tenant (Should Fail with 403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"",
+									"pm.test(\"Access denied for cross-tenant operation\", function () {",
+									"    // Tenant Admin should not be able to access users from System tenant (different tenant)",
+									"    // This test verifies tenant isolation",
+									"    pm.expect(pm.response.code).to.equal(403);",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{tenantAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{systemTenantUserId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"users",
+								"{{systemTenantUserId}}"
+							]
+						},
+						"description": "Attempts to access a user from the System tenant using the Tenant Administrator's token. This should fail with 403 Forbidden, verifying that Tenant Administrators cannot access users from other tenants."
+					},
+					"response": []
+				}
+			],
+			"description": "Tests to verify tenant isolation and that users cannot access resources from other tenants"
+		},
+		{
+			"name": "5. Tenant Cleanup",
+			"item": [
+				{
+					"name": "Offboard Tenant (Delete All Tenant Data)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 204\", function () {",
+									"    pm.response.to.have.status(204);",
+									"});",
+									"",
+									"pm.test(\"Tenant offboarded successfully\", function () {",
+									"    // Verify that the tenant and all associated data (users, roles) are deleted",
+									"    pm.expect(pm.response.code).to.equal(204);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants/{{testTenantId}}/offboard",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants",
+								"{{testTenantId}}",
+								"offboard"
+							]
+						},
+						"description": "Offboards a tenant by deleting all tenant-specific data (users, roles, and all related data). This is different from Delete Tenant which only works if the tenant has no users or roles. Requires Service Administrator role."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Tenant Deleted",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"    pm.response.to.have.status(404);",
+									"});",
+									"",
+									"pm.test(\"Tenant not found (deleted successfully)\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{serviceAdminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants/{{testTenantId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants",
+								"{{testTenantId}}"
+							]
+						},
+						"description": "Verifies that the tenant has been deleted by attempting to retrieve it. Should return 404 Not Found."
+					},
+					"response": []
+				}
+			],
+			"description": "Tenant cleanup endpoints to delete tenants and verify deletion"
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "adminUsername",
+			"value": "admin",
+			"type": "string"
+		},
+		{
+			"key": "adminPassword",
+			"value": "AdminPassword123!",
+			"type": "string"
+		},
+		{
+			"key": "systemTenantId",
+			"value": "",
+			"type": "string",
+			"description": "System tenant ID - will be extracted from JWT token after Service Admin login"
+		},
+		{
+			"key": "serviceAdminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "serviceAdminRefreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "testTenantId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "testTenantName",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenantAdminUserId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenantAdminToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tenantAdminRefreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "testUserId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "systemTenantUserId",
+			"value": "",
+			"type": "string",
+			"description": "User ID from System tenant - used to test cross-tenant access restrictions"
+		}
+	]
+}

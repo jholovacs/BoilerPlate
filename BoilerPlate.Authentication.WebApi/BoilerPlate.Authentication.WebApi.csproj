@@ -32,6 +32,8 @@
     <ProjectReference Include="..\BoilerPlate.Authentication.Database\BoilerPlate.Authentication.Database.csproj" />
     <ProjectReference Include="..\BoilerPlate.Authentication.Database.PostgreSql\BoilerPlate.Authentication.Database.PostgreSql.csproj" />
     <ProjectReference Include="..\BoilerPlate.Authentication.Services\BoilerPlate.Authentication.Services.csproj" />
+    <ProjectReference Include="..\BoilerPlate.Observability.Abstractions\BoilerPlate.Observability.Abstractions.csproj" />
+    <ProjectReference Include="..\BoilerPlate.Observability.OpenTelemetry\BoilerPlate.Observability.OpenTelemetry.csproj" />
     <ProjectReference Include="..\BoilerPlate.ServiceBus.RabbitMq\BoilerPlate.ServiceBus.RabbitMq.csproj" />
   </ItemGroup>
 

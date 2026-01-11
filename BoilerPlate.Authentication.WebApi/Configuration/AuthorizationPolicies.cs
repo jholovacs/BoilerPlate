@@ -1,53 +1,59 @@
-using Microsoft.AspNetCore.Authorization;
-
 namespace BoilerPlate.Authentication.WebApi.Configuration;
 
 /// <summary>
-/// Constants for authorization policy names
+///     Constants for authorization policy names
 /// </summary>
 public static class AuthorizationPolicies
 {
     /// <summary>
-    /// Policy for Service Administrators - full access to all resources across all tenants
+    ///     Policy for Service Administrators - full access to all resources across all tenants
     /// </summary>
     public const string ServiceAdministrator = "ServiceAdministratorPolicy";
 
     /// <summary>
-    /// Policy for Tenant Administrators - full access to resources within their tenant
+    ///     Policy for Tenant Administrators - full access to resources within their tenant
     /// </summary>
     public const string TenantAdministrator = "TenantAdministratorPolicy";
 
     /// <summary>
-    /// Policy for User Administrators - access to user management within their tenant
+    ///     Policy for User Administrators - access to user management within their tenant
     /// </summary>
     public const string UserAdministrator = "UserAdministratorPolicy";
 
     /// <summary>
-    /// Policy for user management - allows Service Administrators, Tenant Administrators, or User Administrators
-    /// Service Administrators can manage users across all tenants, others are restricted to their tenant
+    ///     Policy for user management - allows Service Administrators, Tenant Administrators, or User Administrators
+    ///     Service Administrators can manage users across all tenants, others are restricted to their tenant
     /// </summary>
     public const string UserManagement = "UserManagementPolicy";
 
     /// <summary>
-    /// Policy for role management - allows Service Administrators or Tenant Administrators
-    /// Service Administrators can manage roles across all tenants, Tenant Administrators are restricted to their tenant
+    ///     Policy for role management - allows Service Administrators or Tenant Administrators
+    ///     Service Administrators can manage roles across all tenants, Tenant Administrators are restricted to their tenant
     /// </summary>
     public const string RoleManagement = "RoleManagementPolicy";
 
     /// <summary>
-    /// Policy for OData access - allows Service Administrators or Tenant Administrators
-    /// Service Administrators can query all tenants, Tenant Administrators are restricted to their tenant
+    ///     Policy for OData access - allows Service Administrators or Tenant Administrators
+    ///     Service Administrators can query all tenants, Tenant Administrators are restricted to their tenant
+    ///     Note: For RefreshTokens OData, use UserManagement policy to also allow User Administrators
     /// </summary>
     public const string ODataAccess = "ODataAccessPolicy";
+
+    /// <summary>
+    ///     Policy for OAuth client management - allows Service Administrators or Tenant Administrators
+    ///     Service Administrators can manage clients across all tenants, Tenant Administrators can manage clients for their
+    ///     tenant
+    /// </summary>
+    public const string OAuthClientManagement = "OAuthClientManagementPolicy";
 }
 
 /// <summary>
-/// Extension methods for configuring authorization policies
+///     Extension methods for configuring authorization policies
 /// </summary>
 public static class AuthorizationPolicyExtensions
 {
     /// <summary>
-    /// Adds authorization policies to the service collection
+    ///     Adds authorization policies to the service collection
     /// </summary>
     /// <param name="services">The service collection</param>
     /// <returns>The service collection for chaining</returns>
@@ -77,6 +83,10 @@ public static class AuthorizationPolicyExtensions
 
             // OData Access Policy - allows Service Administrators or Tenant Administrators
             options.AddPolicy(AuthorizationPolicies.ODataAccess, policy =>
+                policy.RequireRole("Service Administrator", "Tenant Administrator"));
+
+            // OAuth Client Management Policy - allows Service Administrators or Tenant Administrators
+            options.AddPolicy(AuthorizationPolicies.OAuthClientManagement, policy =>
                 policy.RequireRole("Service Administrator", "Tenant Administrator"));
         });
 

@@ -4,25 +4,18 @@ using BoilerPlate.Authentication.WebApi.Models;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 namespace BoilerPlate.Authentication.WebApi.Filters;
 
 /// <summary>
-/// Swagger schema filter to add realistic examples to request/response models
+///     Swagger schema filter to add realistic examples to request/response models
 /// </summary>
 public class ExampleSchemaFilter : ISchemaFilter
 {
     /// <inheritdoc />
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
-        if (schema.Example != null)
-        {
-            return; // Example already set
-        }
+        if (schema.Example != null) return; // Example already set
 
         var type = context.Type;
 
@@ -30,7 +23,7 @@ public class ExampleSchemaFilter : ISchemaFilter
         if (type.IsGenericType)
         {
             var genericType = type.GetGenericTypeDefinition();
-            if (genericType == typeof(IEnumerable<>) || 
+            if (genericType == typeof(IEnumerable<>) ||
                 genericType == typeof(List<>) ||
                 genericType == typeof(ICollection<>) ||
                 genericType == typeof(IList<>))
@@ -61,7 +54,8 @@ public class ExampleSchemaFilter : ISchemaFilter
                     };
                     return;
                 }
-                else if (elementType == typeof(UserDto))
+
+                if (elementType == typeof(UserDto))
                 {
                     schema.Example = new OpenApiArray
                     {
@@ -107,7 +101,8 @@ public class ExampleSchemaFilter : ISchemaFilter
                     };
                     return;
                 }
-                else if (elementType == typeof(RoleDto))
+
+                if (elementType == typeof(RoleDto))
                 {
                     schema.Example = new OpenApiArray
                     {
@@ -128,10 +123,11 @@ public class ExampleSchemaFilter : ISchemaFilter
                     };
                     return;
                 }
-                else if (elementType == typeof(string))
-                {
+
+                if (elementType == typeof(string))
                     // Handle string arrays (like role lists)
-                    if (type == typeof(IEnumerable<string>) || type == typeof(List<string>) || type == typeof(ICollection<string>))
+                    if (type == typeof(IEnumerable<string>) || type == typeof(List<string>) ||
+                        type == typeof(ICollection<string>))
                     {
                         schema.Example = new OpenApiArray
                         {
@@ -140,30 +136,24 @@ public class ExampleSchemaFilter : ISchemaFilter
                         };
                         return;
                     }
-                }
             }
         }
 
         // Create tenant request examples
         if (type == typeof(CreateTenantRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["name"] = new OpenApiString("Acme Corporation"),
                 ["description"] = new OpenApiString("Main enterprise tenant for Acme Corporation and its subsidiaries")
             };
-        }
         else if (type == typeof(UpdateTenantRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["name"] = new OpenApiString("Acme Corporation - Updated"),
                 ["description"] = new OpenApiString("Updated description for Acme Corporation tenant"),
                 ["isActive"] = new OpenApiBoolean(true)
             };
-        }
         else if (type == typeof(TenantDto))
-        {
             schema.Example = new OpenApiObject
             {
                 ["id"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
@@ -173,11 +163,9 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["createdAt"] = new OpenApiString("2025-01-15T10:30:00Z"),
                 ["updatedAt"] = new OpenApiString("2025-01-16T14:20:00Z")
             };
-        }
 
         // User request/response examples
         else if (type == typeof(RegisterRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["tenantId"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
@@ -189,9 +177,7 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["lastName"] = new OpenApiString("Doe"),
                 ["phoneNumber"] = new OpenApiString("+1-555-0123")
             };
-        }
         else if (type == typeof(UpdateUserRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["firstName"] = new OpenApiString("John"),
@@ -200,9 +186,7 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["phoneNumber"] = new OpenApiString("+1-555-0123"),
                 ["isActive"] = new OpenApiBoolean(true)
             };
-        }
         else if (type == typeof(UserDto))
-        {
             schema.Example = new OpenApiObject
             {
                 ["id"] = new OpenApiString("7c9e6679-7425-40de-944b-e07fc1f90ae7"),
@@ -223,28 +207,24 @@ public class ExampleSchemaFilter : ISchemaFilter
                     new OpenApiString("Employee")
                 }
             };
-        }
 
         // Role request/response examples
         else if (type == typeof(CreateRoleRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["tenantId"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
                 ["name"] = new OpenApiString("Project Manager"),
-                ["description"] = new OpenApiString("Manages projects and coordinates team activities within the tenant")
+                ["description"] =
+                    new OpenApiString("Manages projects and coordinates team activities within the tenant")
             };
-        }
         else if (type == typeof(UpdateRoleRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["name"] = new OpenApiString("Senior Project Manager"),
-                ["description"] = new OpenApiString("Manages complex projects and provides strategic guidance to project teams")
+                ["description"] =
+                    new OpenApiString("Manages complex projects and provides strategic guidance to project teams")
             };
-        }
         else if (type == typeof(RoleDto))
-        {
             schema.Example = new OpenApiObject
             {
                 ["id"] = new OpenApiString("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
@@ -252,11 +232,9 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["name"] = new OpenApiString("Project Manager"),
                 ["normalizedName"] = new OpenApiString("PROJECT MANAGER")
             };
-        }
 
         // Authentication request/response examples
         else if (type == typeof(LoginRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["tenantId"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
@@ -264,9 +242,7 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["password"] = new OpenApiString("SecurePass123!@#"),
                 ["rememberMe"] = new OpenApiBoolean(false)
             };
-        }
         else if (type == typeof(OAuthTokenRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["grantType"] = new OpenApiString("password"),
@@ -275,9 +251,7 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["tenantId"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
                 ["scope"] = new OpenApiString("api.read api.write")
             };
-        }
         else if (type == typeof(ChangePasswordRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["tenantId"] = new OpenApiString("550e8400-e29b-41d4-a716-446655440000"),
@@ -285,13 +259,12 @@ public class ExampleSchemaFilter : ISchemaFilter
                 ["newPassword"] = new OpenApiString("NewSecurePass456!@#"),
                 ["confirmNewPassword"] = new OpenApiString("NewSecurePass456!@#")
             };
-        }
         else if (type == typeof(AuthResult))
-        {
             schema.Example = new OpenApiObject
             {
                 ["succeeded"] = new OpenApiBoolean(true),
-                ["token"] = new OpenApiString("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YzllNjY3OS03NDI1LTQwZGUtOTQ0Yi1lMDdmYzFmOTBhZTciLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiamRvZSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImpvaG4uZG9lQGFjbWUuY29tIiwiZXhwIjoxNzA1MzUyMDAwLCJpc3MiOiJCb2lsZXJQbGF0ZUF1dGhlbnRpY2F0aW9uIiwiYXVkIjoiQm9pbGVyUGxhdGVBUEkifQ.example-signature"),
+                ["token"] = new OpenApiString(
+                    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YzllNjY3OS03NDI1LTQwZGUtOTQ0Yi1lMDdmYzFmOTBhZTciLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiamRvZSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImpvaG4uZG9lQGFjbWUuY29tIiwiZXhwIjoxNzA1MzUyMDAwLCJpc3MiOiJCb2lsZXJQbGF0ZUF1dGhlbnRpY2F0aW9uIiwiYXVkIjoiQm9pbGVyUGxhdGVBUEkifQ.example-signature"),
                 ["errors"] = new OpenApiArray(),
                 ["user"] = new OpenApiObject
                 {
@@ -313,31 +286,26 @@ public class ExampleSchemaFilter : ISchemaFilter
                     }
                 }
             };
-        }
         else if (type == typeof(OAuthTokenResponse))
-        {
             schema.Example = new OpenApiObject
             {
-                ["accessToken"] = new OpenApiString("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YzllNjY3OS03NDI1LTQwZGUtOTQ0Yi1lMDdmYzFmOTBhZTciLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiamRvZSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImpvaG4uZG9lQGFjbWUuY29tIiwiZXhwIjoxNzA1MzUyMDAwLCJpc3MiOiJCb2lsZXJQbGF0ZUF1dGhlbnRpY2F0aW9uIiwiYXVkIjoiQm9pbGVyUGxhdGVBUEkifQ.example-signature"),
+                ["accessToken"] = new OpenApiString(
+                    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3YzllNjY3OS03NDI1LTQwZGUtOTQ0Yi1lMDdmYzFmOTBhZTciLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiamRvZSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6ImpvaG4uZG9lQGFjbWUuY29tIiwiZXhwIjoxNzA1MzUyMDAwLCJpc3MiOiJCb2lsZXJQbGF0ZUF1dGhlbnRpY2F0aW9uIiwiYXVkIjoiQm9pbGVyUGxhdGVBUEkifQ.example-signature"),
                 ["tokenType"] = new OpenApiString("Bearer"),
                 ["expiresIn"] = new OpenApiInteger(3600),
                 ["refreshToken"] = new OpenApiString("refresh-token-example-123456789abcdef"),
                 ["scope"] = new OpenApiString("api.read api.write")
             };
-        }
         else if (type == typeof(OAuthRefreshTokenRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["grantType"] = new OpenApiString("refresh_token"),
                 ["refreshToken"] = new OpenApiString("refresh-token-example-123456789abcdef"),
                 ["scope"] = new OpenApiString("api.read api.write")
             };
-        }
 
         // Controller-specific request examples
         else if (type == typeof(AssignRolesRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["roles"] = new OpenApiArray
@@ -346,9 +314,7 @@ public class ExampleSchemaFilter : ISchemaFilter
                     new OpenApiString("Team Lead")
                 }
             };
-        }
         else if (type == typeof(RemoveRolesRequest))
-        {
             schema.Example = new OpenApiObject
             {
                 ["roles"] = new OpenApiArray
@@ -357,6 +323,18 @@ public class ExampleSchemaFilter : ISchemaFilter
                     new OpenApiString("Guest")
                 }
             };
-        }
+        else if (type == typeof(CreateTenantSettingRequest))
+            schema.Example = new OpenApiObject
+            {
+                ["tenantId"] = new OpenApiString("00000000-0000-0000-0000-000000000001"),
+                ["key"] = new OpenApiString("RefreshTokenExpirationDays"),
+                ["value"] = new OpenApiString("60")
+            };
+        else if (type == typeof(UpdateTenantSettingRequest))
+            schema.Example = new OpenApiObject
+            {
+                ["key"] = new OpenApiString("RefreshTokenExpirationDays"),
+                ["value"] = new OpenApiString("90")
+            };
     }
 }

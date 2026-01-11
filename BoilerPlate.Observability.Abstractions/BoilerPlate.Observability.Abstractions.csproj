@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <Description>Abstractions and interfaces for observability, tracing, and metrics</Description>
     <Copyright>Copyright (c) 2025 Jeremy Holovacs</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
 </Project>

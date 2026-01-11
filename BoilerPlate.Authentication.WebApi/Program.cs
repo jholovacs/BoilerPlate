@@ -1,33 +1,38 @@
+using System.Diagnostics;
+using System.Reflection;
 using BoilerPlate.Authentication.Database.PostgreSql.Extensions;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Extensions;
 using BoilerPlate.Authentication.WebApi.Filters;
+using BoilerPlate.Authentication.WebApi.Middleware;
 using BoilerPlate.Authentication.WebApi.Services;
+using BoilerPlate.Observability.Abstractions;
+using BoilerPlate.Observability.OpenTelemetry.Extensions;
 using BoilerPlate.ServiceBus.RabbitMq.Extensions;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OData;
-using Microsoft.OData.Edm;
+using Microsoft.OpenApi.Models;
+using MongoDB.Driver;
 using Serilog;
 using Serilog.Events;
-using Serilog.Sinks.MongoDB;
-using MongoDB.Driver;
+using Swashbuckle.AspNetCore.SwaggerUI;
 
 // Configure Serilog before creating the builder
 // Check if we're running in design-time mode (EF Core migrations)
 // EF Core tools set certain environment variables or use specific patterns
 // Check multiple indicators to detect design-time operations
-var processName = System.Diagnostics.Process.GetCurrentProcess().ProcessName.ToLowerInvariant();
+var processName = Process.GetCurrentProcess().ProcessName.ToLowerInvariant();
 var commandLineArgs = Environment.GetCommandLineArgs();
 var efDesignOperation = Environment.GetEnvironmentVariable("EF_DESIGN_OPERATION");
 var efToolsPath = Environment.GetEnvironmentVariable("EF_TOOLS_PATH");
 
-var isDesignTime = 
+var isDesignTime =
     !string.IsNullOrWhiteSpace(efDesignOperation) ||
     !string.IsNullOrWhiteSpace(efToolsPath) ||
-    processName.Contains("ef") || 
+    processName.Contains("ef") ||
     processName.Contains("dotnet-ef") ||
-    commandLineArgs.Any(arg => 
-        (arg.Contains("ef", StringComparison.OrdinalIgnoreCase) && !arg.Contains("efcore", StringComparison.OrdinalIgnoreCase)) ||
+    commandLineArgs.Any(arg =>
+        (arg.Contains("ef", StringComparison.OrdinalIgnoreCase) &&
+         !arg.Contains("efcore", StringComparison.OrdinalIgnoreCase)) ||
         arg.Contains("design", StringComparison.OrdinalIgnoreCase) ||
         arg.Contains("migration", StringComparison.OrdinalIgnoreCase) ||
         arg.Contains("database", StringComparison.OrdinalIgnoreCase));
@@ -61,10 +66,7 @@ else
             // Parse database name from connection string
             var uri = new Uri(mongoDbConnectionString);
             var databaseName = uri.AbsolutePath.TrimStart('/');
-            if (string.IsNullOrWhiteSpace(databaseName))
-            {
-                databaseName = "logs";
-            }
+            if (string.IsNullOrWhiteSpace(databaseName)) databaseName = "logs";
 
             var mongoClient = new MongoClient(mongoDbConnectionString);
             var mongoDatabase = mongoClient.GetDatabase(databaseName);
@@ -99,9 +101,25 @@ try
     Log.Information("Starting web host");
 
     var builder = WebApplication.CreateBuilder(args);
-    
+
     // Use Serilog instead of default logging
     builder.Host.UseSerilog();
+
+    // Add HttpContextAccessor for accessing HttpContext in services/middleware
+    builder.Services.AddHttpContextAccessor();
+
+    // Register OpenTelemetry metrics recorder
+    // During design-time, skip metrics registration to avoid issues
+    if (!isDesignTime)
+    {
+        // Add OpenTelemetry metrics with OTLP exporter
+        builder.Services.AddOpenTelemetryMetrics(builder.Configuration, "BoilerPlate.Authentication");
+    }
+    else
+    {
+        // During design-time, register null implementation to avoid issues
+        builder.Services.AddSingleton<IMetricsRecorder, NullMetricsRecorder>();
+    }
 
     // Add services to the container
     builder.Services.AddControllers()
@@ -116,7 +134,7 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c =>
     {
-        c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+        c.SwaggerDoc("v1", new OpenApiInfo
         {
             Title = "Authentication API",
             Version = "v1",
@@ -125,31 +143,32 @@ try
         });
 
         // Add JWT authentication to Swagger
-        c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+        c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
-            Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\". " +
-                          "Obtain a token from the /oauth/token endpoint.",
+            Description =
+                "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\". " +
+                "Obtain a token from the /oauth/token endpoint.",
             Name = "Authorization",
-            In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-            Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+            In = ParameterLocation.Header,
+            Type = SecuritySchemeType.Http,
             Scheme = "Bearer",
             BearerFormat = "JWT"
         });
 
         // Enable XML comments for better documentation
-        var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+        var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
         var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-        if (File.Exists(xmlPath))
-        {
-            c.IncludeXmlComments(xmlPath);
-        }
+        if (File.Exists(xmlPath)) c.IncludeXmlComments(xmlPath);
 
         // Add operation filter to include authorization requirements in Swagger
         c.OperationFilter<AuthorizationOperationFilter>();
-        
+
+        // Add operation filter for OAuth endpoint documentation
+        c.OperationFilter<OAuthOperationFilter>();
+
         // Add schema filter to include realistic examples in Swagger
         c.SchemaFilter<ExampleSchemaFilter>();
-        
+
         // Include OData endpoints
         c.DocumentFilter<ODataDocumentFilter>();
     });
@@ -157,10 +176,8 @@ try
     // During design-time (EF Core migrations), only register essential services
     // Skip services that require external connections (RabbitMQ, MongoDB, etc.)
     if (!isDesignTime)
-    {
         // Add RabbitMQ service bus (connection string can be overridden via RABBITMQ_CONNECTION_STRING environment variable)
         builder.Services.AddRabbitMqServiceBus(builder.Configuration);
-    }
 
     // Add PostgreSQL database (required for migrations)
     builder.Services.AddAuthenticationDatabasePostgreSql(builder.Configuration);
@@ -190,11 +207,9 @@ try
     // During design-time, don't configure the HTTP pipeline - just return early
     // EF Core tools only need the DbContext, not the full running application
     if (isDesignTime)
-    {
         // Don't configure or run the app during design-time
         // Just building it is enough for EF Core tools to get the DbContext
         return;
-    }
 
     // Configure the HTTP request pipeline
     // Enable Swagger in all environments (can be restricted to Development if needed)
@@ -208,12 +223,23 @@ try
         c.EnableFilter();
         c.ShowExtensions();
         c.EnableValidator();
-        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+        c.DocExpansion(DocExpansion.List);
         c.DefaultModelsExpandDepth(-1); // Collapse models by default
-        c.DefaultModelRendering(Swashbuckle.AspNetCore.SwaggerUI.ModelRendering.Model);
+        c.DefaultModelRendering(ModelRendering.Model);
     });
 
     app.UseHttpsRedirection();
+
+    // Enable routing (required for route-based middleware to work correctly)
+    app.UseRouting();
+
+    // Request metrics middleware - must come after routing to access route information
+    // This tracks request duration and count with route tags
+    // During design-time, skip this middleware
+    if (!isDesignTime)
+    {
+        app.UseMiddleware<RequestMetricsMiddleware>();
+    }
 
     // Authentication must come before Authorization
     // These are only needed during runtime, not during design-time
@@ -221,18 +247,19 @@ try
     {
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // Enrich log context with username from authenticated user
+        // This must come after UseAuthentication/UseAuthorization so the user is authenticated
+        app.UseMiddleware<UsernameLogEnricherMiddleware>();
     }
 
     // Map controllers (includes OData controllers)
     app.MapControllers();
 
     // Only run the app during runtime, not during design-time
-    if (!isDesignTime)
-    {
-        app.Run();
-    }
+    if (!isDesignTime) app.Run();
 }
-catch (Microsoft.Extensions.Hosting.HostAbortedException)
+catch (HostAbortedException)
 {
     // HostAbortedException is expected during EF Core design-time operations
     // EF Core tools intentionally abort the host after getting the DbContext

@@ -1,22 +1,22 @@
 namespace BoilerPlate.Authentication.Abstractions.Models;
 
 /// <summary>
-/// Request model for updating a tenant
+///     Request model for updating a tenant
 /// </summary>
 public class UpdateTenantRequest
 {
     /// <summary>
-    /// Tenant name
+    ///     Tenant name
     /// </summary>
     public string? Name { get; set; }
 
     /// <summary>
-    /// Tenant description
+    ///     Tenant description
     /// </summary>
     public string? Description { get; set; }
 
     /// <summary>
-    /// Indicates whether the tenant is active
+    ///     Indicates whether the tenant is active
     /// </summary>
     public bool? IsActive { get; set; }
 }

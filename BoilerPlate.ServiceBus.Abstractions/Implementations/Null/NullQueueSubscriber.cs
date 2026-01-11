@@ -1,15 +1,16 @@
 namespace BoilerPlate.ServiceBus.Abstractions;
 
 /// <summary>
-/// Null implementation of IQueueSubscriber that does nothing
-/// Useful for development or when messaging is not needed
+///     Null implementation of IQueueSubscriber that does nothing
+///     Useful for development or when messaging is not needed
 /// </summary>
 /// <typeparam name="TMessage">The type of message to subscribe to</typeparam>
 public class NullQueueSubscriber<TMessage> : IQueueSubscriber<TMessage>
     where TMessage : class, IMessage
 {
     /// <inheritdoc />
-    public Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler, CancellationToken cancellationToken = default)
+    public Task SubscribeAsync(Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler,
+        CancellationToken cancellationToken = default)
     {
         // No-op: do nothing, subscription never receives messages
         return Task.CompletedTask;

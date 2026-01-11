@@ -1,16 +1,16 @@
-using BoilerPlate.Authentication.Database.Entities;
-using BoilerPlate.Authentication.WebApi.Configuration;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
+using BoilerPlate.Authentication.Database.Entities;
+using BoilerPlate.Authentication.WebApi.Configuration;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace BoilerPlate.Authentication.WebApi.Services;
 
 /// <summary>
-/// Service for generating and validating JWT tokens using RS256 (RSA asymmetric encryption)
+///     Service for generating and validating JWT tokens using RS256 (RSA asymmetric encryption)
 /// </summary>
 public class JwtTokenService
 {
@@ -18,7 +18,7 @@ public class JwtTokenService
     private readonly RSA _rsa;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="JwtTokenService"/> class
+    ///     Initializes a new instance of the <see cref="JwtTokenService" /> class
     /// </summary>
     public JwtTokenService(IOptions<JwtSettings> jwtSettings)
     {
@@ -39,12 +39,11 @@ public class JwtTokenService
             catch (CryptographicException ex)
             {
                 if (!string.IsNullOrEmpty(_jwtSettings.PrivateKeyPassword))
-                {
                     throw new InvalidOperationException(
                         "Failed to import private key. Password-protected PEM keys are not directly supported by ImportFromPem. " +
                         "Please decrypt the key first using OpenSSL (openssl rsa -in encrypted_key.pem -out decrypted_key.pem) " +
-                        "or provide an unencrypted key. For security, use a secrets manager to store decrypted keys.", ex);
-                }
+                        "or provide an unencrypted key. For security, use a secrets manager to store decrypted keys.",
+                        ex);
                 throw;
             }
         }
@@ -61,7 +60,7 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Generates a JWT token for a user
+    ///     Generates a JWT token for a user
     /// </summary>
     /// <param name="user">Application user</param>
     /// <param name="roles">User roles</param>
@@ -72,49 +71,39 @@ public class JwtTokenService
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
-            
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+            new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
+
             // Tenant ID claim - required for multi-tenancy
-            new Claim("tenant_id", user.TenantId.ToString()),
-            new Claim("http://schemas.microsoft.com/identity/claims/tenantid", user.TenantId.ToString()),
-            
+            new("tenant_id", user.TenantId.ToString()),
+            new("http://schemas.microsoft.com/identity/claims/tenantid", user.TenantId.ToString()),
+
             // User ID claim
-            new Claim("user_id", user.Id.ToString())
+            new("user_id", user.Id.ToString())
         };
 
         // Add roles as individual claims (for authorization attributes)
         foreach (var role in rolesList)
-        {
             if (!string.IsNullOrWhiteSpace(role))
-            {
                 claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-        }
 
         // Add roles as a JSON array claim for easier parsing
         if (rolesList.Any())
         {
-            var rolesJson = System.Text.Json.JsonSerializer.Serialize(rolesList);
+            var rolesJson = JsonSerializer.Serialize(rolesList);
             claims.Add(new Claim("roles", rolesJson));
         }
 
         // Add custom claims
-        if (!string.IsNullOrEmpty(user.FirstName))
-        {
-            claims.Add(new Claim(ClaimTypes.GivenName, user.FirstName));
-        }
+        if (!string.IsNullOrEmpty(user.FirstName)) claims.Add(new Claim(ClaimTypes.GivenName, user.FirstName));
 
-        if (!string.IsNullOrEmpty(user.LastName))
-        {
-            claims.Add(new Claim(ClaimTypes.Surname, user.LastName));
-        }
+        if (!string.IsNullOrEmpty(user.LastName)) claims.Add(new Claim(ClaimTypes.Surname, user.LastName));
 
         // Calculate expiration time
         var expirationTime = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes);
-        
+
         // Add expiry claim (Unix timestamp in seconds)
         var expiryUnixTimestamp = ((DateTimeOffset)expirationTime).ToUnixTimeSeconds();
         claims.Add(new Claim(JwtRegisteredClaimNames.Exp, expiryUnixTimestamp.ToString(), ClaimValueTypes.Integer64));
@@ -127,9 +116,9 @@ public class JwtTokenService
         var credentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256); // RS256
 
         var token = new JwtSecurityToken(
-            issuer: _jwtSettings.Issuer,
-            audience: _jwtSettings.Audience,
-            claims: claims,
+            _jwtSettings.Issuer,
+            _jwtSettings.Audience,
+            claims,
             expires: expirationTime,
             signingCredentials: credentials
         );
@@ -138,7 +127,7 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Generates a refresh token
+    ///     Generates a refresh token
     /// </summary>
     /// <returns>Refresh token string</returns>
     public string GenerateRefreshToken()
@@ -150,7 +139,7 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Gets the RSA public key for token validation
+    ///     Gets the RSA public key for token validation
     /// </summary>
     /// <returns>RSA parameters</returns>
     public RSAParameters GetPublicKey()
@@ -159,7 +148,7 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Gets the RSA private key for token signing
+    ///     Gets the RSA private key for token signing
     /// </summary>
     /// <returns>RSA parameters</returns>
     public RSAParameters GetPrivateKey()
@@ -168,7 +157,68 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Exports the public key in PEM format
+    ///     Validates and decodes a JWT token (for introspection).
+    ///     Validates the token signature, issuer, and audience, but not the lifetime (allows introspection of expired tokens).
+    /// </summary>
+    /// <param name="token">The JWT token string</param>
+    /// <param name="validateSignature">Whether to validate the token signature. Default is true.</param>
+    /// <returns>The decoded JWT security token, or null if invalid</returns>
+    public JwtSecurityToken? ValidateAndDecodeToken(string token, bool validateSignature = true)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        try
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            if (!tokenHandler.CanReadToken(token)) return null;
+
+            if (validateSignature)
+            {
+                var key = new RsaSecurityKey(_rsa)
+                {
+                    KeyId = "auth-key-1"
+                };
+
+                var validationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = false, // Don't validate lifetime for introspection (we'll check manually)
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = _jwtSettings.Issuer,
+                    ValidAudience = _jwtSettings.Audience,
+                    IssuerSigningKey = key,
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
+
+                if (validatedToken is JwtSecurityToken jwtToken) return jwtToken;
+            }
+            else
+            {
+                // Just decode without validation (for introspection when signature is already validated elsewhere)
+                var jwtToken = tokenHandler.ReadJwtToken(token);
+                return jwtToken;
+            }
+        }
+        catch (SecurityTokenException)
+        {
+            // Token signature, issuer, or audience is invalid
+            return null;
+        }
+        catch (Exception)
+        {
+            // Token is invalid or expired
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Exports the public key in PEM format
     /// </summary>
     /// <returns>Public key PEM string</returns>
     public string ExportPublicKeyPem()
@@ -177,7 +227,7 @@ public class JwtTokenService
     }
 
     /// <summary>
-    /// Exports the private key in PEM format
+    ///     Exports the private key in PEM format
     /// </summary>
     /// <returns>Private key PEM string</returns>
     public string ExportPrivateKeyPem()

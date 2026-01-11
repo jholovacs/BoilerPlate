@@ -1,19 +1,20 @@
 using BoilerPlate.Authentication.WebApi.Configuration;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace BoilerPlate.Authentication.WebApi.Tests.Configuration;
 
 /// <summary>
-/// Unit tests for AuthorizationPolicies
+///     Unit tests for AuthorizationPolicies
 /// </summary>
 public class AuthorizationPoliciesTests
 {
     /// <summary>
-    /// Test case: AuthorizationPolicies constants should have the correct string values.
-    /// Scenario: All policy constant values are accessed and verified. Each constant should match its expected string value, ensuring consistent policy names across the application and preventing typos or mismatches.
+    ///     Test case: AuthorizationPolicies constants should have the correct string values.
+    ///     Scenario: All policy constant values are accessed and verified. Each constant should match its expected string
+    ///     value, ensuring consistent policy names across the application and preventing typos or mismatches.
     /// </summary>
     [Fact]
     public void AuthorizationPolicies_ShouldHaveCorrectConstantValues()
@@ -28,8 +29,12 @@ public class AuthorizationPoliciesTests
     }
 
     /// <summary>
-    /// Test case: AddAuthorizationPolicies extension method should register all authorization policies in the service collection.
-    /// Scenario: The AddAuthorizationPolicies extension method is called on a service collection. After building the service provider, the authorization policy provider should be resolvable and all major policies (ServiceAdministrator, UserManagement) should be registered and retrievable, confirming the extension method correctly configures authorization policies.
+    ///     Test case: AddAuthorizationPolicies extension method should register all authorization policies in the service
+    ///     collection.
+    ///     Scenario: The AddAuthorizationPolicies extension method is called on a service collection. After building the
+    ///     service provider, the authorization policy provider should be resolvable and all major policies
+    ///     (ServiceAdministrator, UserManagement) should be registered and retrievable, confirming the extension method
+    ///     correctly configures authorization policies.
     /// </summary>
     [Fact]
     public async Task AddAuthorizationPolicies_ShouldRegisterAllPolicies()
@@ -45,18 +50,23 @@ public class AuthorizationPoliciesTests
         var serviceProvider = services.BuildServiceProvider();
         var authorizationPolicyProvider = serviceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
         authorizationPolicyProvider.Should().NotBeNull();
-        
+
         // Verify policies are registered
-        var serviceAdminPolicy = await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.ServiceAdministrator);
-        var userManagementPolicy = await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.UserManagement);
-        
+        var serviceAdminPolicy =
+            await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.ServiceAdministrator);
+        var userManagementPolicy =
+            await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.UserManagement);
+
         serviceAdminPolicy.Should().NotBeNull();
         userManagementPolicy.Should().NotBeNull();
     }
 
     /// <summary>
-    /// Test case: AddAuthorizationPolicies should register the ServiceAdministratorPolicy with the correct role requirement.
-    /// Scenario: The AddAuthorizationPolicies extension method is called and the ServiceAdministratorPolicy is retrieved. The policy should exist and contain a RolesAuthorizationRequirement, confirming that Service Administrator role is properly configured for authorization checks.
+    ///     Test case: AddAuthorizationPolicies should register the ServiceAdministratorPolicy with the correct role
+    ///     requirement.
+    ///     Scenario: The AddAuthorizationPolicies extension method is called and the ServiceAdministratorPolicy is retrieved.
+    ///     The policy should exist and contain a RolesAuthorizationRequirement, confirming that Service Administrator role is
+    ///     properly configured for authorization checks.
     /// </summary>
     [Fact]
     public async Task AddAuthorizationPolicies_ShouldRegisterServiceAdministratorPolicy()
@@ -71,14 +81,17 @@ public class AuthorizationPoliciesTests
         var serviceProvider = services.BuildServiceProvider();
         var authorizationPolicyProvider = serviceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
         var policy = await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.ServiceAdministrator);
-        
+
         policy.Should().NotBeNull();
-        policy!.Requirements.Should().ContainSingle(r => r is Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement);
+        policy!.Requirements.Should().ContainSingle(r => r is RolesAuthorizationRequirement);
     }
 
     /// <summary>
-    /// Test case: AddAuthorizationPolicies should register the UserManagementPolicy with the correct role requirements.
-    /// Scenario: The AddAuthorizationPolicies extension method is called and the UserManagementPolicy is retrieved. The policy should exist and contain a RolesAuthorizationRequirement, confirming that multiple administrative roles (Service Administrator, Tenant Administrator, User Administrator) are properly configured for user management authorization checks.
+    ///     Test case: AddAuthorizationPolicies should register the UserManagementPolicy with the correct role requirements.
+    ///     Scenario: The AddAuthorizationPolicies extension method is called and the UserManagementPolicy is retrieved. The
+    ///     policy should exist and contain a RolesAuthorizationRequirement, confirming that multiple administrative roles
+    ///     (Service Administrator, Tenant Administrator, User Administrator) are properly configured for user management
+    ///     authorization checks.
     /// </summary>
     [Fact]
     public async Task AddAuthorizationPolicies_ShouldRegisterUserManagementPolicy()
@@ -93,14 +106,16 @@ public class AuthorizationPoliciesTests
         var serviceProvider = services.BuildServiceProvider();
         var authorizationPolicyProvider = serviceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
         var policy = await authorizationPolicyProvider.GetPolicyAsync(AuthorizationPolicies.UserManagement);
-        
+
         policy.Should().NotBeNull();
-        policy!.Requirements.Should().ContainSingle(r => r is Microsoft.AspNetCore.Authorization.Infrastructure.RolesAuthorizationRequirement);
+        policy!.Requirements.Should().ContainSingle(r => r is RolesAuthorizationRequirement);
     }
 
     /// <summary>
-    /// Test case: AddAuthorizationPolicies should return the same service collection instance for method chaining.
-    /// Scenario: The AddAuthorizationPolicies extension method is called on a service collection. The method should return the same service collection instance it was called on, enabling fluent API patterns and method chaining for service configuration.
+    ///     Test case: AddAuthorizationPolicies should return the same service collection instance for method chaining.
+    ///     Scenario: The AddAuthorizationPolicies extension method is called on a service collection. The method should return
+    ///     the same service collection instance it was called on, enabling fluent API patterns and method chaining for service
+    ///     configuration.
     /// </summary>
     [Fact]
     public void AddAuthorizationPolicies_ShouldReturnServiceCollection()

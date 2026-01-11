@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15-alpine
-    pull_policy: never
+    pull_policy: if_not_present
     container_name: postgres-auth
     restart: unless-stopped
     environment:
@@ -20,7 +20,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    pull_policy: never
+    pull_policy: if_not_present
     container_name: rabbitmq-auth
     restart: unless-stopped
     environment:
@@ -39,7 +39,7 @@ services:
 
   mongodb:
     image: mongo:7.0
-    pull_policy: never
+    pull_policy: if_not_present
     container_name: mongodb-logs
     restart: unless-stopped
     environment:
@@ -54,6 +54,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    pull_policy: if_not_present
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - otel_collector_data:/var/lib/otel-collector
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics endpoint (collector's own metrics)
+      - "8889:8889"   # Prometheus exporter metrics (collected metrics)
+      - "13133:13133" # Health check extension endpoint
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
 
   webapi:
     image: boilerplate-authentication-webapi:latest
@@ -77,6 +106,8 @@ services:
       - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
       # RabbitMQ connection (using service name in docker-compose)
       - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
+      # OpenTelemetry Collector connection (using service name in docker-compose)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       # Admin user configuration
       - ADMIN_USERNAME=admin
       - ADMIN_PASSWORD=AdminPassword123!
@@ -87,6 +118,8 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
+      otel-collector:
+        condition: service_healthy
     # Healthcheck commented out - verify manually by accessing http://localhost:8080/health
     # The .NET image may not have curl/wget by default
     # healthcheck:
@@ -96,7 +129,34 @@ services:
     #   retries: 3
     #   start_period: 40s
 
+  audit:
+    image: boilerplate-services-audit:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: BoilerPlate.Services.Audit/Dockerfile
+    container_name: boilerplate-services-audit
+    restart: unless-stopped
+    environment:
+      # MongoDB connection (using service name in docker-compose)
+      - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+      # RabbitMQ connection (using service name in docker-compose)
+      - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    # Healthcheck - just check if the process is running
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 volumes:
   postgres_data:
   rabbitmq_data:
   mongodb_data:
+  otel_collector_data:

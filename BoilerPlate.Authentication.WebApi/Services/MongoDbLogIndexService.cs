@@ -1,11 +1,10 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace BoilerPlate.Authentication.WebApi.Services;
 
 /// <summary>
-/// Service to create MongoDB indexes for log collection on application startup
+///     Service to create MongoDB indexes for log collection on application startup
 /// </summary>
 public class MongoDbLogIndexService : IHostedService
 {
@@ -14,12 +13,13 @@ public class MongoDbLogIndexService : IHostedService
     private readonly ILogger<MongoDbLogIndexService> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MongoDbLogIndexService"/> class
+    ///     Initializes a new instance of the <see cref="MongoDbLogIndexService" /> class
     /// </summary>
     public MongoDbLogIndexService(ILogger<MongoDbLogIndexService> logger)
     {
-        _connectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING") 
-            ?? throw new InvalidOperationException("MONGODB_CONNECTION_STRING environment variable is required");
+        _connectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING")
+                            ?? throw new InvalidOperationException(
+                                "MONGODB_CONNECTION_STRING environment variable is required");
         _logger = logger;
 
         // Parse database name from connection string or use default
@@ -28,7 +28,7 @@ public class MongoDbLogIndexService : IHostedService
     }
 
     /// <summary>
-    /// Creates the timestamp index on the logs collection
+    ///     Creates the timestamp index on the logs collection
     /// </summary>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -36,17 +36,17 @@ public class MongoDbLogIndexService : IHostedService
         {
             var client = new MongoClient(_connectionString);
             var database = client.GetDatabase(_databaseName);
-            var collection = database.GetCollection<MongoDB.Bson.BsonDocument>("logs");
+            var collection = database.GetCollection<BsonDocument>("logs");
 
             // Create index on timestamp field (descending for most recent first)
-            var indexDefinition = Builders<MongoDB.Bson.BsonDocument>.IndexKeys.Descending("Timestamp");
+            var indexDefinition = Builders<BsonDocument>.IndexKeys.Descending("Timestamp");
             var indexOptions = new CreateIndexOptions
             {
                 Name = "Timestamp_Index",
                 Background = true
             };
 
-            var indexModel = new CreateIndexModel<MongoDB.Bson.BsonDocument>(indexDefinition, indexOptions);
+            var indexModel = new CreateIndexModel<BsonDocument>(indexDefinition, indexOptions);
 
             // Check if index already exists
             var indexes = await (await collection.Indexes.ListAsync(cancellationToken)).ToListAsync(cancellationToken);
@@ -70,7 +70,7 @@ public class MongoDbLogIndexService : IHostedService
     }
 
     /// <summary>
-    /// No cleanup needed
+    ///     No cleanup needed
     /// </summary>
     public Task StopAsync(CancellationToken cancellationToken)
     {

@@ -1,17 +1,17 @@
 namespace BoilerPlate.Authentication.Abstractions.Models;
 
 /// <summary>
-/// Request model for creating a tenant
+///     Request model for creating a tenant
 /// </summary>
 public class CreateTenantRequest
 {
     /// <summary>
-    /// Tenant name
+    ///     Tenant name
     /// </summary>
     public required string Name { get; set; }
 
     /// <summary>
-    /// Tenant description
+    ///     Tenant description
     /// </summary>
     public string? Description { get; set; }
 }

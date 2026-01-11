@@ -5,12 +5,12 @@ using Microsoft.OData.ModelBuilder;
 namespace BoilerPlate.Authentication.WebApi.Configuration;
 
 /// <summary>
-/// Configuration for OData Entity Data Model (EDM)
+///     Configuration for OData Entity Data Model (EDM)
 /// </summary>
 public static class ODataConfiguration
 {
     /// <summary>
-    /// Builds the OData Entity Data Model
+    ///     Builds the OData Entity Data Model
     /// </summary>
     /// <returns>The EDM model</returns>
     public static IEdmModel GetEdmModel()
@@ -31,7 +31,7 @@ public static class ODataConfiguration
         usersEntitySet.EntityType.Property(u => u.PhoneNumberConfirmed);
         usersEntitySet.EntityType.Property(u => u.CreatedAt);
         usersEntitySet.EntityType.Property(u => u.UpdatedAt);
-        
+
         // Configure navigation property
         usersEntitySet.EntityType.HasOptional(u => u.Tenant);
 
@@ -44,7 +44,7 @@ public static class ODataConfiguration
         rolesEntitySet.EntityType.Property(r => r.TenantId).IsRequired();
         rolesEntitySet.EntityType.Property(r => r.CreatedAt);
         rolesEntitySet.EntityType.Property(r => r.UpdatedAt);
-        
+
         // Configure navigation property
         rolesEntitySet.EntityType.HasOptional(r => r.Tenant);
 
@@ -56,6 +56,43 @@ public static class ODataConfiguration
         tenantsEntitySet.EntityType.Property(t => t.IsActive);
         tenantsEntitySet.EntityType.Property(t => t.CreatedAt);
         tenantsEntitySet.EntityType.Property(t => t.UpdatedAt);
+
+        // Configure RefreshTokens entity set
+        var refreshTokensEntitySet = builder.EntitySet<RefreshToken>("RefreshTokens");
+        refreshTokensEntitySet.EntityType.HasKey(rt => rt.Id);
+
+        // Exclude sensitive properties from OData responses (EncryptedToken and TokenHash)
+        // These are stored in the database but should not be exposed via OData API
+        refreshTokensEntitySet.EntityType.Ignore(rt => rt.EncryptedToken);
+        refreshTokensEntitySet.EntityType.Ignore(rt => rt.TokenHash);
+
+        // Include queryable properties for searching and filtering
+        refreshTokensEntitySet.EntityType.Property(rt => rt.UserId).IsRequired();
+        refreshTokensEntitySet.EntityType.Property(rt => rt.TenantId).IsRequired();
+        refreshTokensEntitySet.EntityType.Property(rt => rt.ExpiresAt).IsRequired();
+        refreshTokensEntitySet.EntityType.Property(rt => rt.IsUsed);
+        refreshTokensEntitySet.EntityType.Property(rt => rt.UsedAt);
+        refreshTokensEntitySet.EntityType.Property(rt => rt.IsRevoked);
+        refreshTokensEntitySet.EntityType.Property(rt => rt.RevokedAt);
+        refreshTokensEntitySet.EntityType.Property(rt => rt.CreatedAt).IsRequired();
+        refreshTokensEntitySet.EntityType.Property(rt => rt.IssuedFromIpAddress);
+        refreshTokensEntitySet.EntityType.Property(rt => rt.IssuedFromUserAgent);
+
+        // Configure navigation properties
+        refreshTokensEntitySet.EntityType.HasOptional(rt => rt.User);
+        refreshTokensEntitySet.EntityType.HasOptional(rt => rt.Tenant);
+
+        // Configure TenantSettings entity set
+        var tenantSettingsEntitySet = builder.EntitySet<TenantSetting>("TenantSettings");
+        tenantSettingsEntitySet.EntityType.HasKey(ts => ts.Id);
+        tenantSettingsEntitySet.EntityType.Property(ts => ts.TenantId).IsRequired();
+        tenantSettingsEntitySet.EntityType.Property(ts => ts.Key).IsRequired();
+        tenantSettingsEntitySet.EntityType.Property(ts => ts.Value);
+        tenantSettingsEntitySet.EntityType.Property(ts => ts.CreatedAt).IsRequired();
+        tenantSettingsEntitySet.EntityType.Property(ts => ts.UpdatedAt);
+
+        // Configure navigation property
+        tenantSettingsEntitySet.EntityType.HasOptional(ts => ts.Tenant);
 
         return builder.GetEdmModel();
     }

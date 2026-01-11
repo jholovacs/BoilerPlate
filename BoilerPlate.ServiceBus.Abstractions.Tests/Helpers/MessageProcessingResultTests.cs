@@ -1,19 +1,17 @@
-using BoilerPlate.ServiceBus.Abstractions;
 using FluentAssertions;
-using Xunit;
 
 namespace BoilerPlate.ServiceBus.Abstractions.Tests.Helpers;
 
 /// <summary>
-/// Unit tests for MessageProcessingResult enum
+///     Unit tests for MessageProcessingResult enum
 /// </summary>
 public class MessageProcessingResultTests
 {
     /// <summary>
-    /// Tests that MessageProcessingResult enum has exactly three values: Success, Failed, and PermanentFailure.
-    /// Verifies that:
-    /// - The enum contains exactly 3 distinct values
-    /// - All expected values are present (Success, Failed, PermanentFailure)
+    ///     Tests that MessageProcessingResult enum has exactly three values: Success, Failed, and PermanentFailure.
+    ///     Verifies that:
+    ///     - The enum contains exactly 3 distinct values
+    ///     - All expected values are present (Success, Failed, PermanentFailure)
     /// </summary>
     [Fact]
     public void MessageProcessingResult_ShouldHaveThreeValues()
@@ -29,10 +27,10 @@ public class MessageProcessingResultTests
     }
 
     /// <summary>
-    /// Tests that MessageProcessingResult.Success has an integer value of 0.
-    /// Verifies that:
-    /// - The Success enum value is correctly defined as 0
-    /// - This represents a successful message processing outcome
+    ///     Tests that MessageProcessingResult.Success has an integer value of 0.
+    ///     Verifies that:
+    ///     - The Success enum value is correctly defined as 0
+    ///     - This represents a successful message processing outcome
     /// </summary>
     [Fact]
     public void MessageProcessingResult_Success_ShouldBeZero()
@@ -42,10 +40,10 @@ public class MessageProcessingResultTests
     }
 
     /// <summary>
-    /// Tests that MessageProcessingResult.Failed has an integer value of 1.
-    /// Verifies that:
-    /// - The Failed enum value is correctly defined as 1
-    /// - This represents a temporary failure in message processing
+    ///     Tests that MessageProcessingResult.Failed has an integer value of 1.
+    ///     Verifies that:
+    ///     - The Failed enum value is correctly defined as 1
+    ///     - This represents a temporary failure in message processing
     /// </summary>
     [Fact]
     public void MessageProcessingResult_Failed_ShouldBeOne()
@@ -55,10 +53,10 @@ public class MessageProcessingResultTests
     }
 
     /// <summary>
-    /// Tests that MessageProcessingResult.PermanentFailure has an integer value of 2.
-    /// Verifies that:
-    /// - The PermanentFailure enum value is correctly defined as 2
-    /// - This represents a permanent failure in message processing that should not be retried
+    ///     Tests that MessageProcessingResult.PermanentFailure has an integer value of 2.
+    ///     Verifies that:
+    ///     - The PermanentFailure enum value is correctly defined as 2
+    ///     - This represents a permanent failure in message processing that should not be retried
     /// </summary>
     [Fact]
     public void MessageProcessingResult_PermanentFailure_ShouldBeTwo()

@@ -1,24 +1,24 @@
+using System.Text;
+using System.Text.Json;
 using BoilerPlate.ServiceBus.Abstractions;
 using BoilerPlate.ServiceBus.RabbitMq.Connection;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
-using System.Text;
-using System.Text.Json;
 
 namespace BoilerPlate.ServiceBus.RabbitMq.Services;
 
 /// <summary>
-/// RabbitMQ implementation of ITopicPublisher
+///     RabbitMQ implementation of ITopicPublisher
 /// </summary>
 public class RabbitMqTopicPublisher : ITopicPublisher
 {
     private readonly RabbitMqConnectionManager _connectionManager;
-    private readonly ITopicNameResolver _topicNameResolver;
-    private readonly ILogger<RabbitMqTopicPublisher> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly ILogger<RabbitMqTopicPublisher> _logger;
+    private readonly ITopicNameResolver _topicNameResolver;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RabbitMqTopicPublisher"/> class
+    ///     Initializes a new instance of the <see cref="RabbitMqTopicPublisher" /> class
     /// </summary>
     public RabbitMqTopicPublisher(
         RabbitMqConnectionManager connectionManager,
@@ -43,16 +43,14 @@ public class RabbitMqTopicPublisher : ITopicPublisher
     }
 
     /// <inheritdoc />
-    public Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata, CancellationToken cancellationToken = default)
+    public Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata,
+        CancellationToken cancellationToken = default)
         where TMessage : class, IMessage, new()
     {
         try
         {
             // Ensure message has required properties
-            if (message.CreatedTimestamp == default)
-            {
-                message.CreatedTimestamp = DateTime.UtcNow;
-            }
+            if (message.CreatedTimestamp == default) message.CreatedTimestamp = DateTime.UtcNow;
 
             var topicName = _topicNameResolver.ResolveTopicName(typeof(TMessage));
             var channel = _connectionManager.CreateChannel();
@@ -61,10 +59,10 @@ public class RabbitMqTopicPublisher : ITopicPublisher
             {
                 // Declare exchange (topic exchange)
                 channel.ExchangeDeclare(
-                    exchange: topicName,
-                    type: ExchangeType.Topic,
-                    durable: true,
-                    autoDelete: false);
+                    topicName,
+                    ExchangeType.Topic,
+                    true,
+                    false);
 
                 // Serialize message
                 var json = JsonSerializer.Serialize(message, _jsonOptions);
@@ -88,19 +86,15 @@ public class RabbitMqTopicPublisher : ITopicPublisher
 
                 // Add metadata as headers
                 if (metadata != null)
-                {
                     foreach (var kvp in metadata)
-                    {
                         properties.Headers[kvp.Key] = kvp.Value;
-                    }
-                }
 
                 // Publish message
                 channel.BasicPublish(
-                    exchange: topicName,
-                    routingKey: "#", // Topic exchange with # routing key matches all bindings
-                    basicProperties: properties,
-                    body: body);
+                    topicName,
+                    "#", // Topic exchange with # routing key matches all bindings
+                    properties,
+                    body);
 
                 _logger.LogDebug(
                     "Published message to topic {TopicName}. MessageId: {MessageId}, TraceId: {TraceId}",

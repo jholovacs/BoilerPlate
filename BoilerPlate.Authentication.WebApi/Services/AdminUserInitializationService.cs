@@ -8,16 +8,16 @@ using Microsoft.EntityFrameworkCore;
 namespace BoilerPlate.Authentication.WebApi.Services;
 
 /// <summary>
-/// Hosted service that initializes the admin user at startup
+///     Hosted service that initializes the admin user at startup
 /// </summary>
 public class AdminUserInitializationService : IHostedService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<AdminUserInitializationService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AdminUserInitializationService> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AdminUserInitializationService"/> class
+    ///     Initializes a new instance of the <see cref="AdminUserInitializationService" /> class
     /// </summary>
     public AdminUserInitializationService(
         IServiceProvider serviceProvider,
@@ -65,12 +65,9 @@ public class AdminUserInitializationService : IHostedService
             var user = await context.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.UserName == adminUsername, cancellationToken);
-            
+
             // If found, reload using UserManager to get a properly tracked entity for updates
-            if (user != null)
-            {
-                user = await userManager.FindByIdAsync(user.Id.ToString());
-            }
+            if (user != null) user = await userManager.FindByIdAsync(user.Id.ToString());
 
             Guid userTenantId;
             if (user == null)
@@ -78,7 +75,7 @@ public class AdminUserInitializationService : IHostedService
                 // User doesn't exist - create it in system tenant
                 _logger.LogInformation("Admin user does not exist. Creating new admin user in system tenant.");
                 userTenantId = systemTenantId.Value;
-                
+
                 user = new ApplicationUser
                 {
                     Id = Guid.NewGuid(),
@@ -93,7 +90,7 @@ public class AdminUserInitializationService : IHostedService
                 var createResult = await userManager.CreateAsync(user, adminPassword);
                 if (!createResult.Succeeded)
                 {
-                    _logger.LogError("Failed to create admin user: {Errors}", 
+                    _logger.LogError("Failed to create admin user: {Errors}",
                         string.Join(", ", createResult.Errors.Select(e => e.Description)));
                     return;
                 }
@@ -103,7 +100,9 @@ public class AdminUserInitializationService : IHostedService
             else
             {
                 // User exists - update it
-                _logger.LogInformation("Admin user exists in tenant {TenantId}. Updating password and ensuring correct configuration.", user.TenantId);
+                _logger.LogInformation(
+                    "Admin user exists in tenant {TenantId}. Updating password and ensuring correct configuration.",
+                    user.TenantId);
                 userTenantId = user.TenantId;
 
                 // Reset password
@@ -111,7 +110,7 @@ public class AdminUserInitializationService : IHostedService
                 var resetResult = await userManager.ResetPasswordAsync(user, token, adminPassword);
                 if (!resetResult.Succeeded)
                 {
-                    _logger.LogError("Failed to reset admin user password: {Errors}", 
+                    _logger.LogError("Failed to reset admin user password: {Errors}",
                         string.Join(", ", resetResult.Errors.Select(e => e.Description)));
                     return;
                 }
@@ -124,7 +123,7 @@ public class AdminUserInitializationService : IHostedService
                 var updateResult = await userManager.UpdateAsync(user);
                 if (!updateResult.Succeeded)
                 {
-                    _logger.LogError("Failed to update admin user: {Errors}", 
+                    _logger.LogError("Failed to update admin user: {Errors}",
                         string.Join(", ", updateResult.Errors.Select(e => e.Description)));
                     return;
                 }
@@ -137,8 +136,9 @@ public class AdminUserInitializationService : IHostedService
             var serviceAdminRoleName = "Service Administrator";
             var serviceAdminRole = await context.Roles
                 .AsNoTracking()
-                .FirstOrDefaultAsync(r => r.TenantId == userTenantId && r.Name == serviceAdminRoleName, cancellationToken);
-            
+                .FirstOrDefaultAsync(r => r.TenantId == userTenantId && r.Name == serviceAdminRoleName,
+                    cancellationToken);
+
             if (serviceAdminRole == null)
             {
                 _logger.LogInformation("Creating Service Administrator role in tenant {TenantId}", userTenantId);
@@ -155,7 +155,7 @@ public class AdminUserInitializationService : IHostedService
                 var roleResult = await roleManager.CreateAsync(serviceAdminRole);
                 if (!roleResult.Succeeded)
                 {
-                    _logger.LogError("Failed to create Service Administrator role: {Errors}", 
+                    _logger.LogError("Failed to create Service Administrator role: {Errors}",
                         string.Join(", ", roleResult.Errors.Select(e => e.Description)));
                     return;
                 }
@@ -171,7 +171,7 @@ public class AdminUserInitializationService : IHostedService
                 var addRoleResult = await userManager.AddToRoleAsync(user, serviceAdminRoleName);
                 if (!addRoleResult.Succeeded)
                 {
-                    _logger.LogError("Failed to assign Service Administrator role: {Errors}", 
+                    _logger.LogError("Failed to assign Service Administrator role: {Errors}",
                         string.Join(", ", addRoleResult.Errors.Select(e => e.Description)));
                     return;
                 }
@@ -199,9 +199,10 @@ public class AdminUserInitializationService : IHostedService
     }
 
     /// <summary>
-    /// Gets or creates a system tenant for service administrators
+    ///     Gets or creates a system tenant for service administrators
     /// </summary>
-    private async Task<Guid?> GetOrCreateSystemTenantAsync(ITenantService tenantService, CancellationToken cancellationToken)
+    private async Task<Guid?> GetOrCreateSystemTenantAsync(ITenantService tenantService,
+        CancellationToken cancellationToken)
     {
         // Check if ADMIN_TENANT_ID is specified
         var adminTenantIdStr = _configuration["ADMIN_TENANT_ID"];
@@ -213,10 +214,9 @@ public class AdminUserInitializationService : IHostedService
                 _logger.LogInformation("Using specified tenant for admin user: {TenantId}", adminTenantId);
                 return adminTenantId;
             }
-            else
-            {
-                _logger.LogWarning("Specified ADMIN_TENANT_ID not found: {TenantId}. Creating system tenant instead.", adminTenantId);
-            }
+
+            _logger.LogWarning("Specified ADMIN_TENANT_ID not found: {TenantId}. Creating system tenant instead.",
+                adminTenantId);
         }
 
         // Try to find an existing system tenant

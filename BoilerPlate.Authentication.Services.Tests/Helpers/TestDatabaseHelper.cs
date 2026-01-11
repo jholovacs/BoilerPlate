@@ -7,54 +7,55 @@ using Microsoft.Extensions.DependencyInjection;
 namespace BoilerPlate.Authentication.Services.Tests.Helpers;
 
 /// <summary>
-/// Concrete test implementation of BaseAuthDbContext for in-memory testing
+///     Concrete test implementation of BaseAuthDbContext for in-memory testing
 /// </summary>
 internal class TestAuthDbContext : BaseAuthDbContext
 {
     private static string? _databaseName;
-    
+
     /// <summary>
-    /// Sets the database name for option conversion
-    /// </summary>
-    public static void SetDatabaseName(string databaseName)
-    {
-        _databaseName = databaseName;
-    }
-    
-    /// <summary>
-    /// Constructor that accepts TestAuthDbContext options (created by AddDbContext)
-    /// This converts the options to BaseAuthDbContext options internally
+    ///     Constructor that accepts TestAuthDbContext options (created by AddDbContext)
+    ///     This converts the options to BaseAuthDbContext options internally
     /// </summary>
     public TestAuthDbContext(DbContextOptions<TestAuthDbContext> testOptions)
         : base(CreateBaseOptionsFromTestOptions(testOptions))
     {
     }
-    
+
     /// <summary>
-    /// Creates BaseAuthDbContext options from TestAuthDbContext options
-    /// Uses the stored database name to create compatible BaseAuthDbContext options
+    ///     Sets the database name for option conversion
     /// </summary>
-    private static DbContextOptions<BaseAuthDbContext> CreateBaseOptionsFromTestOptions(DbContextOptions<TestAuthDbContext> testOptions)
+    public static void SetDatabaseName(string databaseName)
+    {
+        _databaseName = databaseName;
+    }
+
+    /// <summary>
+    ///     Creates BaseAuthDbContext options from TestAuthDbContext options
+    ///     Uses the stored database name to create compatible BaseAuthDbContext options
+    /// </summary>
+    private static DbContextOptions<BaseAuthDbContext> CreateBaseOptionsFromTestOptions(
+        DbContextOptions<TestAuthDbContext> testOptions)
     {
         // Use the stored database name that was set when configuring AddDbContext
         // This ensures both TestAuthDbContext and BaseAuthDbContext use the same in-memory database
         var databaseName = _databaseName ?? Guid.NewGuid().ToString();
-        
+
         // Create a new options builder for BaseAuthDbContext with the same database name
         var builder = new DbContextOptionsBuilder<BaseAuthDbContext>();
         builder.UseInMemoryDatabase(databaseName);
-        
+
         return builder.Options;
     }
 }
 
 /// <summary>
-/// Helper class for setting up test databases and dependencies
+///     Helper class for setting up test databases and dependencies
 /// </summary>
 public static class TestDatabaseHelper
 {
     /// <summary>
-    /// Creates a service provider with all necessary dependencies for authentication services
+    ///     Creates a service provider with all necessary dependencies for authentication services
     /// </summary>
     public static (IServiceProvider ServiceProvider, BaseAuthDbContext Context) CreateServiceProvider()
     {
@@ -68,12 +69,12 @@ public static class TestDatabaseHelper
         // TestAuthDbContext has a constructor that accepts DbContextOptions<TestAuthDbContext>
         // and converts it internally to BaseAuthDbContext options using the stored database name
         services.AddDbContext<TestAuthDbContext>(options =>
-            options.UseInMemoryDatabase(databaseName), ServiceLifetime.Scoped);
-        
+            options.UseInMemoryDatabase(databaseName));
+
         // Register BaseAuthDbContext as an alias to TestAuthDbContext for backward compatibility
         // This allows code that depends on BaseAuthDbContext to work
         services.AddScoped<BaseAuthDbContext>(sp => sp.GetRequiredService<TestAuthDbContext>());
-        
+
         // Register DbContextOptions<BaseAuthDbContext> for any code that needs it
         // This creates options compatible with BaseAuthDbContext using the same database name
         services.AddScoped<DbContextOptions<BaseAuthDbContext>>(sp =>
@@ -87,27 +88,27 @@ public static class TestDatabaseHelper
 
         // Add Identity services
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
-        {
-            // Relax password requirements for testing
-            options.Password.RequireDigit = false;
-            options.Password.RequireLowercase = false;
-            options.Password.RequireUppercase = false;
-            options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequiredLength = 1;
-            options.Password.RequiredUniqueChars = 0;
+            {
+                // Relax password requirements for testing
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequiredLength = 1;
+                options.Password.RequiredUniqueChars = 0;
 
-            // Lockout settings
-            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-            options.Lockout.MaxFailedAccessAttempts = 5;
-            options.Lockout.AllowedForNewUsers = true;
+                // Lockout settings
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.AllowedForNewUsers = true;
 
-            // User settings
-            options.User.RequireUniqueEmail = true;
-            options.SignIn.RequireConfirmedEmail = false;
-            options.SignIn.RequireConfirmedPhoneNumber = false;
-        })
-        .AddEntityFrameworkStores<TestAuthDbContext>()
-        .AddDefaultTokenProviders();
+                // User settings
+                options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedEmail = false;
+                options.SignIn.RequireConfirmedPhoneNumber = false;
+            })
+            .AddEntityFrameworkStores<TestAuthDbContext>()
+            .AddDefaultTokenProviders();
 
         services.AddLogging();
 
@@ -119,7 +120,7 @@ public static class TestDatabaseHelper
     }
 
     /// <summary>
-    /// Seeds the database with test data
+    ///     Seeds the database with test data
     /// </summary>
     public static async Task SeedTestDataAsync(BaseAuthDbContext context)
     {
