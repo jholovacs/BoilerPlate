@@ -1,0 +1,170 @@
+name: Code Coverage and Statistics
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build solution
+      run: dotnet build --no-restore -c Release
+      
+    - name: Run tests with coverage
+      run: |
+        dotnet test \
+          --no-build \
+          --configuration Release \
+          --collect:"XPlat Code Coverage" \
+          --results-directory:"${{ github.workspace }}/TestResults" \
+          --logger:"trx;LogFileName=test-results.trx" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,json,lcov
+          
+    - name: Install ReportGenerator
+      run: |
+        dotnet tool install -g dotnet-reportgenerator-globaltool
+        
+    - name: Generate coverage report
+      run: |
+        reportgenerator \
+          -reports:"${{ github.workspace }}/TestResults/**/coverage.cobertura.xml" \
+          -targetdir:"${{ github.workspace }}/CoverageReport" \
+          -reporttypes:"Html;Badges;JsonSummary;Cobertura" \
+          -classfilters:"-*Tests*;-*Test*"
+          
+    - name: Install cloc for code statistics
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cloc
+        
+    - name: Generate code statistics
+      run: |
+        cloc \
+          --exclude-dir=bin,obj,TestResults,CoverageReport,.git,node_modules \
+          --exclude-ext=json,md,yml,yaml,ps1,Makefile \
+          --json \
+          --out="${{ github.workspace }}/code-stats.json" \
+          .
+          
+    - name: Extract coverage summary
+      id: coverage
+      run: |
+        if [ -f "${{ github.workspace }}/CoverageReport/Summary.json" ]; then
+          # Try different JSON paths for coverage
+          COVERAGE=$(jq -r '.summary.linecoverage // .linecoverage // 0' "${{ github.workspace }}/CoverageReport/Summary.json" 2>/dev/null || echo "0")
+          if [ "$COVERAGE" = "null" ] || [ -z "$COVERAGE" ] || [ "$COVERAGE" = "0" ]; then
+            # Fallback to grep if jq doesn't work
+            COVERAGE=$(grep -oP '"linecoverage"\s*:\s*\K[0-9.]+' "${{ github.workspace }}/CoverageReport/Summary.json" | head -1 || echo "0")
+          fi
+        else
+          COVERAGE="0"
+        fi
+        echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+        echo "Code Coverage: $COVERAGE%"
+        
+    - name: Extract code statistics
+      id: stats
+      run: |
+        if [ -f "${{ github.workspace }}/code-stats.json" ]; then
+          TOTAL_LINES=$(jq -r '.SUM.code // 0' "${{ github.workspace }}/code-stats.json")
+          TOTAL_FILES=$(jq -r '.SUM.nFiles // 0' "${{ github.workspace }}/code-stats.json")
+          TOTAL_COMMENTS=$(jq -r '.SUM.comment // 0' "${{ github.workspace }}/code-stats.json")
+          TOTAL_BLANK=$(jq -r '.SUM.blank // 0' "${{ github.workspace }}/code-stats.json")
+        else
+          TOTAL_LINES="0"
+          TOTAL_FILES="0"
+          TOTAL_COMMENTS="0"
+          TOTAL_BLANK="0"
+        fi
+        echo "total_lines=$TOTAL_LINES" >> $GITHUB_OUTPUT
+        echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
+        echo "total_comments=$TOTAL_COMMENTS" >> $GITHUB_OUTPUT
+        echo "total_blank=$TOTAL_BLANK" >> $GITHUB_OUTPUT
+        echo "Total Lines of Code: $TOTAL_LINES"
+        echo "Total Files: $TOTAL_FILES"
+        echo "Total Comments: $TOTAL_COMMENTS"
+        echo "Total Blank Lines: $TOTAL_BLANK"
+        
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          CoverageReport/
+          TestResults/
+          code-stats.json
+        retention-days: 30
+        
+    - name: Comment PR with coverage
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let stats = { SUM: { code: 0, nFiles: 0, comment: 0, blank: 0 } };
+          try {
+            stats = JSON.parse(fs.readFileSync('${{ github.workspace }}/code-stats.json', 'utf8'));
+          } catch (e) {
+            console.log('Could not read code-stats.json');
+          }
+          const coverage = '${{ steps.coverage.outputs.coverage }}';
+          
+          const languageBreakdown = Object.entries(stats)
+            .filter(([key]) => key !== 'header' && key !== 'SUM' && stats[key] && stats[key].code)
+            .map(([lang, data]) => `- **${lang}**: ${data.code.toLocaleString()} lines in ${data.nFiles} files`)
+            .join('\n') || 'No language statistics available';
+          
+          const body = `## 📊 Code Coverage and Statistics
+          
+          ### Code Coverage
+          **Coverage: ${coverage}%**
+          
+          ### Code Statistics
+          - **Total Lines of Code:** ${stats.SUM.code.toLocaleString()}
+          - **Total Files:** ${stats.SUM.nFiles.toLocaleString()}
+          - **Total Comments:** ${stats.SUM.comment.toLocaleString()}
+          - **Total Blank Lines:** ${stats.SUM.blank.toLocaleString()}
+          
+          ### Language Breakdown
+          ${languageBreakdown}
+          
+          Coverage report and detailed statistics are available in the workflow artifacts.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+          
+    - name: Summary
+      run: |
+        echo "## Code Coverage and Statistics Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Code Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "**Coverage: ${{ steps.coverage.outputs.coverage }}%**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Code Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Lines of Code:** ${{ steps.stats.outputs.total_lines }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Files:** ${{ steps.stats.outputs.total_files }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Comments:** ${{ steps.stats.outputs.total_comments }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Blank Lines:** ${{ steps.stats.outputs.total_blank }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📦 Coverage reports and detailed statistics are available in the workflow artifacts." >> $GITHUB_STEP_SUMMARY
