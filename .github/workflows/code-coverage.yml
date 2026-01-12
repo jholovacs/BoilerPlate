@@ -1,10 +1,8 @@
 name: Code Coverage and Statistics
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
