@@ -123,15 +123,25 @@ jobs:
           const fs = require('fs');
           let stats = { SUM: { code: 0, nFiles: 0, comment: 0, blank: 0 } };
           try {
-            stats = JSON.parse(fs.readFileSync('${{ github.workspace }}/code-stats.json', 'utf8'));
+            const parsed = JSON.parse(fs.readFileSync('${{ github.workspace }}/code-stats.json', 'utf8'));
+            // Ensure SUM exists with defaults, matching shell script behavior
+            stats = {
+              ...parsed,
+              SUM: {
+                code: parsed?.SUM?.code ?? 0,
+                nFiles: parsed?.SUM?.nFiles ?? 0,
+                comment: parsed?.SUM?.comment ?? 0,
+                blank: parsed?.SUM?.blank ?? 0
+              }
+            };
           } catch (e) {
-            console.log('Could not read code-stats.json');
+            console.log('Could not read or parse code-stats.json:', e.message);
           }
           const coverage = '${{ steps.coverage.outputs.coverage }}';
           
           const languageBreakdown = Object.entries(stats)
             .filter(([key]) => key !== 'header' && key !== 'SUM' && stats[key] && stats[key].code)
-            .map(([lang, data]) => `- **${lang}**: ${data.code.toLocaleString()} lines in ${data.nFiles} files`)
+            .map(([lang, data]) => `- **${lang}**: ${(data.code ?? 0).toLocaleString()} lines in ${(data.nFiles ?? 0)} files`)
             .join('\n') || 'No language statistics available';
           
           const body = `## 📊 Code Coverage and Statistics
@@ -140,10 +150,10 @@ jobs:
           **Coverage: ${coverage}%**
           
           ### Code Statistics
-          - **Total Lines of Code:** ${stats.SUM.code.toLocaleString()}
-          - **Total Files:** ${stats.SUM.nFiles.toLocaleString()}
-          - **Total Comments:** ${stats.SUM.comment.toLocaleString()}
-          - **Total Blank Lines:** ${stats.SUM.blank.toLocaleString()}
+          - **Total Lines of Code:** ${(stats.SUM?.code ?? 0).toLocaleString()}
+          - **Total Files:** ${(stats.SUM?.nFiles ?? 0).toLocaleString()}
+          - **Total Comments:** ${(stats.SUM?.comment ?? 0).toLocaleString()}
+          - **Total Blank Lines:** ${(stats.SUM?.blank ?? 0).toLocaleString()}
           
           ### Language Breakdown
           ${languageBreakdown}

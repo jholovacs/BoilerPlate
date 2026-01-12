@@ -50,7 +50,7 @@ jobs:
       if: always()
       run: |
         echo "Searching for coverage files in TestResults directory..."
-        find "${{ github.workspace }}/TestResults" -type f -name "*.xml" -o -name "*.json" -o -name "*.cobertura" 2>/dev/null | head -20 || echo "No coverage files found"
+        find "${{ github.workspace }}/TestResults" -type f \( -name "*.xml" -o -name "*.json" -o -name "*.cobertura" \) 2>/dev/null | head -20 || echo "No coverage files found"
         echo ""
         echo "TestResults directory structure:"
         find "${{ github.workspace }}/TestResults" -type f 2>/dev/null | head -20 || echo "TestResults directory not found"
@@ -68,7 +68,7 @@ jobs:
       if: always()
       run: |
         # Find all coverage files
-        COVERAGE_FILES=$(find "${{ github.workspace }}/TestResults" -name "coverage.cobertura.xml" -o -name "coverage.xml" -o -name "*.cobertura.xml" 2>/dev/null | tr '\n' ';' | sed 's/;$//')
+        COVERAGE_FILES=$(find "${{ github.workspace }}/TestResults" -type f \( -name "coverage.cobertura.xml" -o -name "coverage.xml" -o -name "*.cobertura.xml" \) 2>/dev/null | tr '\n' ';' | sed 's/;$//')
         
         if [ -z "$COVERAGE_FILES" ]; then
           echo "⚠️ No coverage files found. Skipping report generation."
