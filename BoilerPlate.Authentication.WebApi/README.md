@@ -7,6 +7,7 @@ OAuth2 authentication API with JWT tokens using RS256 (RSA asymmetric encryption
 - OAuth2 Resource Owner Password Credentials grant
 - JWT token generation with RS256 (RSA-2048) asymmetric encryption
 - Multi-tenant support
+- **Multi-Factor Authentication (MFA)** with TOTP support
 - RESTful API endpoints
 - Swagger/OpenAPI documentation
 
@@ -482,6 +483,660 @@ Authorization: Bearer <access_token>
 - For enhanced PQC resistance, consider upgrading to RSA-4096 or implementing Dilithium/Falcon algorithms when available
 - Private keys should be stored securely (Azure Key Vault, AWS Secrets Manager, etc.)
 - Never commit private keys to source control
+
+## SAML2 Identity Provider Configuration
+
+This solution supports SAML2 as an Identity Provider (IdP) at the tenant level, allowing each tenant to configure their own SAML2 SSO settings. This enables Single Sign-On (SSO) integration with external Service Providers (SPs).
+
+### Overview
+
+SAML2 SSO allows users to authenticate once with an Identity Provider and access multiple Service Provider applications without re-entering credentials. In this solution:
+
+- **This application acts as the Identity Provider (IdP)**: Users authenticate here and are redirected to Service Provider applications
+- **Each tenant can have its own SAML2 configuration**: Different tenants can use different Service Providers
+- **Settings are stored per tenant**: All SAML2 settings are stored in the `TenantSettings` table with keys prefixed with `saml2.`
+
+### Prerequisites
+
+1. **Service Provider (SP) Information**: You need the following information from the Service Provider:
+   - SP Entity ID (unique identifier for the SP)
+   - SP Assertion Consumer Service (ACS) URL (where SAML responses are sent)
+   - SP certificate (for verifying signed requests, if required)
+
+2. **X.509 Certificates**: You'll need certificates for:
+   - **IdP Certificate** (this application): Used to sign SAML responses sent to Service Providers
+   - **SP Certificate**: Used to verify signed authentication requests from Service Providers (if required)
+
+### Step 1: Generate X.509 Certificates
+
+#### Generate IdP Certificate (for signing SAML responses)
+
+```bash
+# Generate a self-signed certificate for the IdP (valid for 1 year)
+openssl req -x509 -newkey rsa:2048 -keyout idp_private_key.pem -out idp_certificate.pem -days 365 -nodes -subj "/CN=your-idp-entity-id/O=Your Organization"
+
+# For production, use a certificate from a trusted Certificate Authority (CA)
+# or your organization's PKI infrastructure
+```
+
+#### Convert Certificate to Base64
+
+For storing in tenant settings, convert the certificate to base64:
+
+```bash
+# Linux/macOS
+cat idp_certificate.pem | base64 | tr -d '\n'
+
+# Windows PowerShell
+[Convert]::ToBase64String([System.IO.File]::ReadAllBytes("idp_certificate.pem"))
+```
+
+**Note**: The certificate should include the full certificate chain if using a CA-signed certificate.
+
+### Step 2: Configure SAML2 Settings for a Tenant
+
+Use the REST API to configure SAML2 settings for a tenant. You'll need a valid JWT token with appropriate permissions (Service Administrator or Tenant Administrator).
+
+#### API Endpoint
+
+```
+POST /saml2/settings/{tenantId}
+```
+
+#### Request Body
+
+```json
+{
+  "isEnabled": true,
+  "idpEntityId": "https://your-app.com/saml2",
+  "idpSsoServiceUrl": "https://your-app.com/saml2/sso/{tenantId}",
+  "idpCertificate": "base64-encoded-certificate",
+  "spEntityId": "https://sp-application.com",
+  "spAcsUrl": "https://sp-application.com/saml/acs",
+  "spCertificate": "base64-encoded-sp-certificate",
+  "nameIdFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+  "signAuthnRequest": true,
+  "requireSignedResponse": true,
+  "requireEncryptedAssertion": false,
+  "clockSkewMinutes": 5
+}
+```
+
+#### Configuration Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `isEnabled` | Yes | Set to `true` to enable SAML2 SSO for this tenant |
+| `idpEntityId` | Yes | Unique identifier for this Identity Provider (e.g., `https://your-app.com/saml2`) |
+| `idpSsoServiceUrl` | Yes | URL where Service Providers initiate SSO (typically `https://your-app.com/saml2/sso/{tenantId}`) |
+| `idpCertificate` | Yes | Base64-encoded X.509 certificate for signing SAML responses |
+| `spEntityId` | Yes | Service Provider's entity ID (provided by the SP) |
+| `spAcsUrl` | Yes | Service Provider's Assertion Consumer Service URL (where SAML responses are sent) |
+| `spCertificate` | Recommended | Base64-encoded X.509 certificate from the Service Provider (for verifying signed requests) |
+| `spCertificatePrivateKey` | Optional | Private key for SP certificate (if certificate doesn't include private key) |
+| `nameIdFormat` | Optional | Name identifier format (default: `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`) |
+| `attributeMapping` | Optional | JSON mapping of SAML attributes to user properties |
+| `signAuthnRequest` | Optional | Whether to sign authentication requests (default: `true`) |
+| `requireSignedResponse` | Optional | Whether to require signed SAML responses (default: `true`) |
+| `requireEncryptedAssertion` | Optional | Whether to require encrypted assertions (default: `false`) |
+| `clockSkewMinutes` | Optional | Clock skew tolerance in minutes (default: `5`) |
+
+#### Example: Configure SAML2 for a Tenant
+
+```bash
+# Using curl
+curl -X POST "https://your-app.com/saml2/settings/123e4567-e89b-12d3-a456-426614174000" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isEnabled": true,
+    "idpEntityId": "https://your-app.com/saml2",
+    "idpSsoServiceUrl": "https://your-app.com/saml2/sso/123e4567-e89b-12d3-a456-426614174000",
+    "idpCertificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
+    "spEntityId": "https://sp-application.com",
+    "spAcsUrl": "https://sp-application.com/saml/acs",
+    "spCertificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
+    "nameIdFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    "signAuthnRequest": true,
+    "requireSignedResponse": true
+  }'
+```
+
+### Step 3: Provide IdP Metadata to Service Provider
+
+Service Providers typically need IdP metadata to configure the SAML2 integration. You can provide them with:
+
+1. **IdP Entity ID**: The value you configured in `idpEntityId`
+2. **SSO Service URL**: The value you configured in `idpSsoServiceUrl`
+3. **IdP Certificate**: The public certificate (they need the public key, not the private key)
+
+#### Generate IdP Metadata XML (Optional)
+
+Some Service Providers require metadata in XML format. You can generate this manually or use SAML2 metadata generators:
+
+```xml
+<?xml version="1.0"?>
+<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata"
+                  entityID="https://your-app.com/saml2">
+  <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <KeyDescriptor use="signing">
+      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <X509Data>
+          <X509Certificate>
+            <!-- Base64-encoded certificate (without BEGIN/END markers) -->
+          </X509Certificate>
+        </X509Data>
+      </KeyInfo>
+    </KeyDescriptor>
+    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+                        Location="https://your-app.com/saml2/sso/{tenantId}"/>
+  </IDPSSODescriptor>
+</EntityDescriptor>
+```
+
+### Step 4: SAML2 SSO Flow
+
+Once configured, the SAML2 SSO flow works as follows:
+
+1. **User initiates SSO**: User clicks a link or is redirected to the Service Provider
+2. **SP redirects to IdP**: Service Provider redirects user to `/saml2/sso/{tenantId}`
+3. **User authenticates**: If not already authenticated, user logs in with username/password
+4. **IdP generates SAML response**: System creates a SAML assertion with user information
+5. **IdP redirects to SP**: User is redirected to SP's ACS URL with SAML response
+6. **SP validates and logs in user**: Service Provider validates the SAML response and creates a session
+
+#### SSO Initiation Endpoint
+
+```
+GET /saml2/sso/{tenantId}?returnUrl=https://sp-application.com/callback
+```
+
+**Parameters:**
+- `tenantId` (path): The tenant ID (UUID)
+- `returnUrl` (query, optional): URL to redirect to after successful authentication
+
+#### Assertion Consumer Service (ACS) Endpoint
+
+```
+POST /saml2/acs/{tenantId}
+```
+
+This endpoint receives SAML responses from Service Providers (if using SP-initiated SSO). The endpoint processes the SAML response and returns a JWT token.
+
+### Step 5: Testing SAML2 Configuration
+
+#### Test SSO Initiation
+
+1. **Get a JWT token** (if testing programmatically):
+   ```bash
+   curl -X POST "https://your-app.com/oauth/token" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "grant_type": "password",
+       "username": "testuser@example.com",
+       "password": "password123"
+     }'
+   ```
+
+2. **Initiate SSO**:
+   ```bash
+   curl -L "https://your-app.com/saml2/sso/123e4567-e89b-12d3-a456-426614174000?returnUrl=https://sp-application.com/callback"
+   ```
+
+3. **Verify redirect**: You should be redirected to the Service Provider's ACS URL with a SAML response.
+
+#### Common Issues and Troubleshooting
+
+1. **"SAML2 SSO is not configured or enabled for this tenant"**
+   - Verify that `isEnabled` is set to `true` in the tenant's SAML2 settings
+   - Check that all required settings are configured
+
+2. **"SAML2 configuration is incomplete"**
+   - Ensure `idpEntityId`, `idpSsoServiceUrl`, and `spEntityId` are all provided
+   - Verify that certificates are properly base64-encoded
+
+3. **Certificate errors**
+   - Ensure certificates are in X.509 format (PEM or DER)
+   - Verify certificates are not expired
+   - Check that certificate encoding is correct (base64)
+
+4. **Clock skew errors**
+   - Increase `clockSkewMinutes` if you're experiencing time synchronization issues
+   - Ensure server clocks are synchronized (use NTP)
+
+### Step 6: Managing SAML2 Settings
+
+#### Get SAML2 Settings
+
+```
+GET /saml2/settings/{tenantId}
+```
+
+Returns the current SAML2 settings (without sensitive data like private keys).
+
+#### Update SAML2 Settings
+
+```
+POST /saml2/settings/{tenantId}
+```
+
+Update any SAML2 settings. Provide only the fields you want to update.
+
+#### Delete SAML2 Settings
+
+```
+DELETE /saml2/settings/{tenantId}
+```
+
+Removes all SAML2 settings for a tenant.
+
+### Security Best Practices
+
+1. **Use CA-signed certificates in production**: Self-signed certificates are acceptable for testing but should be replaced with CA-signed certificates for production
+
+2. **Enable signed requests and responses**: Set `signAuthnRequest` and `requireSignedResponse` to `true` for enhanced security
+
+3. **Use HTTPS**: Always use HTTPS for SAML2 endpoints to protect SAML messages in transit
+
+4. **Rotate certificates periodically**: Plan for certificate rotation and update tenant settings accordingly
+
+5. **Monitor SAML2 authentication**: Log and monitor SAML2 authentication attempts for security auditing
+
+6. **Validate SP certificates**: Always validate Service Provider certificates to prevent man-in-the-middle attacks
+
+7. **Use encrypted assertions for sensitive data**: Enable `requireEncryptedAssertion` if handling sensitive user information
+
+### Example: Complete SAML2 Setup Workflow
+
+```bash
+# 1. Generate IdP certificate
+openssl req -x509 -newkey rsa:2048 -keyout idp_key.pem -out idp_cert.pem -days 365 -nodes \
+  -subj "/CN=your-app.com/O=Your Organization"
+
+# 2. Convert certificate to base64
+IDP_CERT=$(cat idp_cert.pem | base64 | tr -d '\n')
+
+# 3. Get SP information from Service Provider
+SP_ENTITY_ID="https://sp-application.com"
+SP_ACS_URL="https://sp-application.com/saml/acs"
+SP_CERT="<base64-encoded-sp-certificate>"
+
+# 4. Configure SAML2 settings
+curl -X POST "https://your-app.com/saml2/settings/YOUR_TENANT_ID" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"isEnabled\": true,
+    \"idpEntityId\": \"https://your-app.com/saml2\",
+    \"idpSsoServiceUrl\": \"https://your-app.com/saml2/sso/YOUR_TENANT_ID\",
+    \"idpCertificate\": \"$IDP_CERT\",
+    \"spEntityId\": \"$SP_ENTITY_ID\",
+    \"spAcsUrl\": \"$SP_ACS_URL\",
+    \"spCertificate\": \"$SP_CERT\",
+    \"nameIdFormat\": \"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress\",
+    \"signAuthnRequest\": true,
+    \"requireSignedResponse\": true
+  }"
+
+# 5. Test SSO initiation
+curl -L "https://your-app.com/saml2/sso/YOUR_TENANT_ID?returnUrl=https://sp-application.com/callback"
+```
+
+### Additional Resources
+
+- [SAML 2.0 Technical Overview](http://docs.oasis-open.org/security/saml/Post2.0/sstc-saml-tech-overview-2.0.html)
+- [Sustainsys.Saml2 Documentation](https://github.com/Sustainsys/Saml2)
+- [SAML2 Metadata Specification](http://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)
+
+## Multi-Factor Authentication (MFA)
+
+This solution supports Time-based One-Time Password (TOTP) multi-factor authentication, allowing users to add an extra layer of security to their accounts using authenticator apps like Google Authenticator, Microsoft Authenticator, or Authy.
+
+### Overview
+
+MFA adds a second authentication factor after password verification. When MFA is enabled for a user:
+
+1. User authenticates with username/password
+2. System returns an MFA challenge token (instead of JWT)
+3. User provides TOTP code from authenticator app
+4. System validates code and returns JWT access token + refresh token
+
+### Features
+
+- **TOTP-based (RFC 6238 compliant)**: Industry-standard time-based one-time passwords
+- **Works with standard authenticator apps**: Google Authenticator, Microsoft Authenticator, Authy, 1Password, etc.
+- **Backup codes**: Single-use recovery codes for account recovery
+- **Per-user enable/disable**: Users can enable or disable MFA for their accounts
+- **Tenant-aware**: Works seamlessly with multi-tenant architecture
+- **No external dependencies**: Uses ASP.NET Core Identity's built-in TOTP support
+
+### MFA Setup Flow
+
+#### Step 1: Generate MFA Setup Data
+
+**Endpoint:** `POST /api/mfa/setup`
+
+**Authentication:** Requires valid JWT token
+
+**Response:**
+```json
+{
+  "qrCodeUri": "otpauth://totp/BoilerPlate:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=BoilerPlate",
+  "manualEntryKey": "JBSW Y3DP EHPK 3PXP",
+  "account": "user@example.com",
+  "issuer": "BoilerPlate"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://your-app.com/api/mfa/setup" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+**What to do:**
+1. Scan the QR code with your authenticator app, OR
+2. Manually enter the key into your authenticator app
+3. Save the backup codes (generated after enabling MFA)
+
+#### Step 2: Verify and Enable MFA
+
+**Endpoint:** `POST /api/mfa/enable`
+
+**Authentication:** Requires valid JWT token
+
+**Request:**
+```json
+{
+  "code": "123456"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://your-app.com/api/mfa/enable" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "123456"
+  }'
+```
+
+**Response:**
+```json
+{
+  "message": "MFA enabled successfully"
+}
+```
+
+**What to do:**
+1. Enter the 6-digit code from your authenticator app
+2. If valid, MFA is enabled for your account
+
+### Login Flow with MFA
+
+When a user with MFA enabled logs in:
+
+#### Step 1: Authenticate with Username/Password
+
+**Endpoint:** `POST /oauth/token`
+
+**Request:**
+```json
+{
+  "grant_type": "password",
+  "username": "user@example.com",
+  "password": "password123",
+  "tenant_id": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+**Response (if MFA is enabled):**
+```json
+{
+  "error": "mfa_required",
+  "error_description": "Multi-factor authentication is required",
+  "mfa_challenge_token": "base64-encoded-challenge-token",
+  "mfa_verification_url": "/api/mfa/verify"
+}
+```
+
+**Note:** The challenge token is valid for 10 minutes and can only be used once.
+
+#### Step 2: Verify MFA Code
+
+**Endpoint:** `POST /api/mfa/verify`
+
+**Authentication:** Not required (challenge token is used instead)
+
+**Request:**
+```json
+{
+  "challengeToken": "base64-encoded-challenge-token",
+  "code": "123456"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "https://your-app.com/api/mfa/verify" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "challengeToken": "base64-encoded-challenge-token",
+    "code": "123456"
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "refresh-token-abc123..."
+}
+```
+
+#### Alternative: Verify Backup Code
+
+If you've lost access to your authenticator app, you can use a backup code:
+
+**Endpoint:** `POST /api/mfa/verify-backup-code`
+
+**Request:**
+```json
+{
+  "challengeToken": "base64-encoded-challenge-token",
+  "backupCode": "ABCD-1234-EFGH-5678"
+}
+```
+
+**Response:** Same as MFA verify endpoint (JWT access token + refresh token)
+
+**Note:** Backup codes are single-use. After using a backup code, generate new ones.
+
+### Managing MFA
+
+#### Get MFA Status
+
+**Endpoint:** `GET /api/mfa/status`
+
+**Authentication:** Requires valid JWT token
+
+**Response:**
+```json
+{
+  "isEnabled": true,
+  "isRequired": false,
+  "remainingBackupCodes": 8
+}
+```
+
+#### Generate Backup Codes
+
+**Endpoint:** `POST /api/mfa/backup-codes`
+
+**Authentication:** Requires valid JWT token
+
+**Response:**
+```json
+{
+  "backupCodes": [
+    "ABCD-1234-EFGH-5678",
+    "IJKL-9012-MNOP-3456",
+    "..."
+  ]
+}
+```
+
+**Note:** Generating new backup codes invalidates all previous backup codes. Save them securely!
+
+#### Disable MFA
+
+**Endpoint:** `POST /api/mfa/disable`
+
+**Authentication:** Requires valid JWT token
+
+**Response:**
+```json
+{
+  "message": "MFA disabled successfully"
+}
+```
+
+### Complete Example: Enabling and Using MFA
+
+```bash
+# 1. Get JWT token (normal login)
+TOKEN=$(curl -X POST "https://your-app.com/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "password",
+    "username": "user@example.com",
+    "password": "password123"
+  }' | jq -r '.access_token')
+
+# 2. Generate MFA setup
+SETUP=$(curl -X POST "https://your-app.com/api/mfa/setup" \
+  -H "Authorization: Bearer $TOKEN")
+
+# 3. Scan QR code or enter manual key in authenticator app
+# (Get code from authenticator app: 123456)
+
+# 4. Enable MFA
+curl -X POST "https://your-app.com/api/mfa/enable" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "123456"}'
+
+# 5. Generate backup codes
+BACKUP_CODES=$(curl -X POST "https://your-app.com/api/mfa/backup-codes" \
+  -H "Authorization: Bearer $TOKEN")
+# Save these codes securely!
+
+# 6. Login with MFA
+LOGIN_RESPONSE=$(curl -X POST "https://your-app.com/oauth/token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grant_type": "password",
+    "username": "user@example.com",
+    "password": "password123"
+  }')
+
+# Extract challenge token
+CHALLENGE_TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.mfa_challenge_token')
+
+# 7. Verify MFA code
+FINAL_TOKEN=$(curl -X POST "https://your-app.com/api/mfa/verify" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"challengeToken\": \"$CHALLENGE_TOKEN\",
+    \"code\": \"123456\"
+  }")
+```
+
+### Supported Authenticator Apps
+
+MFA works with any TOTP-compatible authenticator app:
+
+- **Google Authenticator** (iOS, Android)
+- **Microsoft Authenticator** (iOS, Android)
+- **Authy** (iOS, Android, Desktop)
+- **1Password** (iOS, Android, Desktop)
+- **LastPass Authenticator** (iOS, Android)
+- **Duo Mobile** (iOS, Android)
+- Any other TOTP-compatible app
+
+### Security Best Practices
+
+1. **Enable MFA for all users**: Encourage or require MFA for enhanced security
+2. **Store backup codes securely**: Backup codes should be stored in a password manager or secure location
+3. **Rotate backup codes periodically**: Generate new backup codes if you suspect they've been compromised
+4. **Use authenticator apps, not SMS**: TOTP is more secure than SMS-based MFA
+5. **Monitor MFA status**: Regularly check MFA status and remaining backup codes
+6. **Disable MFA if device is lost**: If you lose access to your authenticator app, use a backup code to log in, then disable and re-enable MFA
+
+### Tenant-Level MFA Requirements
+
+Tenants can require MFA for all users by setting a tenant setting:
+
+**Setting Key:** `Mfa.Required`
+
+**Setting Value:** `true` or `false`
+
+**Example:**
+```bash
+# Set MFA as required for a tenant
+curl -X POST "https://your-app.com/api/TenantSettings" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenantId": "123e4567-e89b-12d3-a456-426614174000",
+    "key": "Mfa.Required",
+    "value": "true"
+  }'
+```
+
+When `Mfa.Required` is set to `true` for a tenant, users will be prompted to enable MFA during their next login.
+
+### Troubleshooting
+
+#### "Invalid MFA code"
+
+- **Clock synchronization**: Ensure your device's clock is synchronized. TOTP codes are time-sensitive.
+- **Code expired**: TOTP codes change every 30 seconds. Enter the current code from your authenticator app.
+- **Wrong account**: Ensure you're using the correct authenticator entry for this account.
+
+#### "Challenge token expired"
+
+- Challenge tokens expire after 10 minutes. Request a new login to get a new challenge token.
+
+#### "Challenge token already used"
+
+- Challenge tokens are single-use. If you've already used the token, request a new login.
+
+#### "No backup codes remaining"
+
+- Generate new backup codes via `POST /api/mfa/backup-codes`
+- If you've lost access to your authenticator app and have no backup codes, contact your administrator
+
+#### "MFA is not enabled"
+
+- Enable MFA first via `POST /api/mfa/setup` and `POST /api/mfa/enable`
+- Check MFA status via `GET /api/mfa/status`
+
+### API Reference
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
+| `/api/mfa/status` | GET | Yes | Get MFA status for current user |
+| `/api/mfa/setup` | POST | Yes | Generate QR code and setup key |
+| `/api/mfa/enable` | POST | Yes | Enable MFA after verification |
+| `/api/mfa/disable` | POST | Yes | Disable MFA for current user |
+| `/api/mfa/verify` | POST | No | Verify TOTP code and get JWT token |
+| `/api/mfa/verify-backup-code` | POST | No | Verify backup code and get JWT token |
+| `/api/mfa/backup-codes` | POST | Yes | Generate new backup codes |
 
 ## Swagger Documentation
 

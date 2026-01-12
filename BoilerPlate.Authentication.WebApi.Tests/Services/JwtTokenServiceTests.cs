@@ -190,7 +190,7 @@ public class JwtTokenServiceTests
         };
 
         // Act
-        var token = _jwtTokenService.GenerateToken(user, null);
+        var token = _jwtTokenService.GenerateToken(user, Array.Empty<string>());
 
         // Assert
         var handler = new JwtSecurityTokenHandler();

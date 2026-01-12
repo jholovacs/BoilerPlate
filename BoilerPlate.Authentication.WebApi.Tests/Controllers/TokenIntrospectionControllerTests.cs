@@ -514,7 +514,7 @@ public class TokenIntrospectionControllerTests
 
         var request = new TokenIntrospectionRequest
         {
-            Token = null,
+            Token = string.Empty,
             TokenTypeHint = "access_token"
         };
 

@@ -2,9 +2,11 @@ using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Controllers;
+using BoilerPlate.Authentication.WebApi.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -13,10 +15,10 @@ namespace BoilerPlate.Authentication.WebApi.Tests.Controllers;
 /// <summary>
 ///     Unit tests for UsersController
 /// </summary>
-public class UsersControllerTests
+public class UsersControllerTests : IDisposable
 {
     private readonly Mock<IAuthenticationService> _authenticationServiceMock;
-    private readonly Mock<BaseAuthDbContext> _contextMock;
+    private readonly BaseAuthDbContext _context;
     private readonly UsersController _controller;
     private readonly Mock<ILogger<UsersController>> _loggerMock;
     private readonly Mock<IUserService> _userServiceMock;
@@ -25,14 +27,25 @@ public class UsersControllerTests
     {
         _userServiceMock = new Mock<IUserService>();
         _authenticationServiceMock = new Mock<IAuthenticationService>();
-        _contextMock = new Mock<BaseAuthDbContext>();
+        
+        // Use in-memory database instead of mocking to avoid Castle.DynamicProxy dependency
+        var options = new DbContextOptionsBuilder<BaseAuthDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        _context = new TestAuthDbContext(options);
+        
         _loggerMock = new Mock<ILogger<UsersController>>();
 
         _controller = new UsersController(
             _userServiceMock.Object,
             _authenticationServiceMock.Object,
-            _contextMock.Object,
+            _context,
             _loggerMock.Object);
+    }
+
+    public void Dispose()
+    {
+        _context.Dispose();
     }
 
     #region Authorization Attribute Tests

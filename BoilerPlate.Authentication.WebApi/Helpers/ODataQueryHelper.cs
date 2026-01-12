@@ -65,7 +65,7 @@ public static class ODataQueryHelper
     /// </summary>
     /// <typeparam name="T">Entity type</typeparam>
     /// <param name="query">The IQueryable to apply options to</param>
-    /// <param name="queryStringFromBody">OData query string from request body (e.g., "$filter=Name eq 'Test'&$select=Id,Name")</param>
+    /// <param name="queryStringFromBody">OData query string from request body (e.g., <c>$filter</c>=Name eq 'Test'&amp;<c>$select</c>=Id,Name")</param>
     /// <param name="httpContext">HTTP context</param>
     /// <param name="edmModel">The EDM model</param>
     /// <param name="entitySetName">Name of the entity set</param>

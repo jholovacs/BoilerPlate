@@ -21,6 +21,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddScoped<ISaml2Service, Saml2Service>();
+        services.AddScoped<ITenantEmailDomainService, TenantEmailDomainService>();
+        services.AddScoped<IMfaService, MfaService>();
+        services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
 
         return services;
     }

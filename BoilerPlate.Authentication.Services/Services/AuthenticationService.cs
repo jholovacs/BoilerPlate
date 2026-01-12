@@ -18,8 +18,10 @@ public class AuthenticationService : IAuthenticationService
 {
     private readonly BaseAuthDbContext _context;
     private readonly ILogger<AuthenticationService>? _logger;
+    private readonly IPasswordPolicyService? _passwordPolicyService;
     private readonly IQueuePublisher? _queuePublisher;
     private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly ITenantEmailDomainService? _tenantEmailDomainService;
     private readonly ITopicPublisher? _topicPublisher;
     private readonly UserManager<ApplicationUser> _userManager;
 
@@ -32,6 +34,8 @@ public class AuthenticationService : IAuthenticationService
         BaseAuthDbContext context,
         ITopicPublisher? topicPublisher = null,
         IQueuePublisher? queuePublisher = null,
+        ITenantEmailDomainService? tenantEmailDomainService = null,
+        IPasswordPolicyService? passwordPolicyService = null,
         ILogger<AuthenticationService>? logger = null)
     {
         _userManager = userManager;
@@ -39,6 +43,8 @@ public class AuthenticationService : IAuthenticationService
         _context = context;
         _topicPublisher = topicPublisher;
         _queuePublisher = queuePublisher;
+        _tenantEmailDomainService = tenantEmailDomainService;
+        _passwordPolicyService = passwordPolicyService;
         _logger = logger;
     }
 
@@ -61,6 +67,24 @@ public class AuthenticationService : IAuthenticationService
                 Succeeded = false,
                 Errors = new[] { "Invalid or inactive tenant." }
             };
+
+        // Validate password complexity using tenant-specific policy
+        if (_passwordPolicyService != null)
+        {
+            var complexityErrors = await _passwordPolicyService.ValidatePasswordComplexityAsync(
+                request.Password,
+                request.TenantId,
+                cancellationToken);
+
+            if (complexityErrors.Any())
+            {
+                return new AuthResult
+                {
+                    Succeeded = false,
+                    Errors = complexityErrors
+                };
+            }
+        }
 
         // Check if user already exists in this tenant
         var existingUser = await _context.Users
@@ -154,9 +178,48 @@ public class AuthenticationService : IAuthenticationService
     /// <inheritdoc />
     public async Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
+        // Resolve tenant ID if not provided
+        var tenantId = request.TenantId;
+        if (!tenantId.HasValue)
+        {
+            // Try to resolve tenant from email domain if UserNameOrEmail looks like an email
+            if (request.UserNameOrEmail.Contains('@') && _tenantEmailDomainService != null)
+            {
+                var resolvedTenantId = await _tenantEmailDomainService.ResolveTenantIdFromEmailAsync(
+                    request.UserNameOrEmail,
+                    cancellationToken);
+
+                if (resolvedTenantId.HasValue)
+                {
+                    tenantId = resolvedTenantId;
+                    _logger?.LogDebug("Resolved tenant {TenantId} from email domain for user {Email}", tenantId.Value,
+                        request.UserNameOrEmail);
+                }
+                else
+                {
+                    return new AuthResult
+                    {
+                        Succeeded = false,
+                        Errors = new[]
+                        {
+                            "Tenant ID is required. Unable to resolve tenant from email domain. Please specify tenant_id or ensure your email domain is configured."
+                        }
+                    };
+                }
+            }
+            else
+            {
+                return new AuthResult
+                {
+                    Succeeded = false,
+                    Errors = new[] { "Tenant ID is required when using username. Please specify tenant_id." }
+                };
+            }
+        }
+
         // Find user by email or username within the tenant
         var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.TenantId == request.TenantId &&
+            .FirstOrDefaultAsync(u => u.TenantId == tenantId.Value &&
                                       (u.Email == request.UserNameOrEmail || u.UserName == request.UserNameOrEmail),
                 cancellationToken);
 
@@ -195,6 +258,25 @@ public class AuthenticationService : IAuthenticationService
             };
         }
 
+        // Check if password has expired
+        if (_passwordPolicyService != null)
+        {
+            var isPasswordExpired = await _passwordPolicyService.IsPasswordExpiredAsync(
+                user.Id,
+                tenantId.Value,
+                cancellationToken);
+
+            if (isPasswordExpired)
+            {
+                _logger?.LogWarning("Login failed for user {UserId}: Password has expired", user.Id);
+                return new AuthResult
+                {
+                    Succeeded = false,
+                    Errors = new[] { "Your password has expired. Please change your password." }
+                };
+            }
+        }
+
         var userDto = await MapToUserDtoAsync(user, cancellationToken);
 
         return new AuthResult
@@ -215,8 +297,67 @@ public class AuthenticationService : IAuthenticationService
 
         if (user == null) return false;
 
+        // Validate password complexity using tenant-specific policy
+        if (_passwordPolicyService != null)
+        {
+            var complexityErrors = await _passwordPolicyService.ValidatePasswordComplexityAsync(
+                request.NewPassword,
+                request.TenantId,
+                cancellationToken);
+
+            if (complexityErrors.Any())
+            {
+                _logger?.LogWarning(
+                    "Password change failed for user {UserId}: Password does not meet complexity requirements. Errors: {Errors}",
+                    userId, string.Join(", ", complexityErrors));
+                return false;
+            }
+
+            // Check if new password is in history
+            // Hash the new password using Identity's password hasher to check against history
+            var passwordHasher = _userManager.PasswordHasher;
+            var newPasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+
+            var isInHistory = await _passwordPolicyService.IsPasswordInHistoryAsync(
+                userId,
+                newPasswordHash,
+                request.TenantId,
+                cancellationToken);
+
+            if (isInHistory)
+            {
+                _logger?.LogWarning(
+                    "Password change failed for user {UserId}: New password matches a previously used password",
+                    userId);
+                return false;
+            }
+        }
+
+        // Get old password hash before changing
+        var oldPasswordHash = user.PasswordHash;
+
+        // Change password using Identity
         var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-        return result.Succeeded;
+
+        if (!result.Succeeded)
+        {
+            _logger?.LogWarning("Password change failed for user {UserId}: {Errors}", userId,
+                string.Join(", ", result.Errors.Select(e => e.Description)));
+            return false;
+        }
+
+        // Save old password to history (if password history is enabled)
+        if (_passwordPolicyService != null && !string.IsNullOrEmpty(oldPasswordHash))
+        {
+            await _passwordPolicyService.SavePasswordToHistoryAsync(
+                userId,
+                oldPasswordHash,
+                request.TenantId,
+                cancellationToken);
+        }
+
+        _logger?.LogInformation("Password changed successfully for user {UserId}", userId);
+        return true;
     }
 
     private async Task<UserDto> MapToUserDtoAsync(ApplicationUser user, CancellationToken cancellationToken)

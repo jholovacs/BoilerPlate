@@ -76,7 +76,8 @@ public class OAuthController : ControllerBase
     /// <response code="401">Authentication failed. Invalid credentials, authorization code, or client secret.</response>
     /// <remarks>
     ///     **Supported Grant Types:**
-    ///     1. **Password Grant (grant_type=password)**: Use JSON body with username, password, tenant_id
+    ///     1. **Password Grant (grant_type=password)**: Use JSON body with username, password, and optionally tenant_id.
+    ///        If tenant_id is not provided and username is an email address, the tenant will be resolved from the email domain.
     ///     2. **Authorization Code Grant (grant_type=authorization_code)**: Use form-encoded body with code, redirect_uri,
     ///     client_id, code_verifier
     ///     **Content-Type:**
@@ -169,14 +170,40 @@ public class OAuthController : ControllerBase
                 _logger.LogWarning("Failed authentication attempt for user: {Username} in tenant: {TenantId}",
                     request.Username, request.TenantId);
                 return Unauthorized(new
-                    { error = "invalid_grant", error_description = "Invalid username or password" });
+                    { error = "invalid_grant", error_description = authResult.Errors?.FirstOrDefault() ?? "Invalid username or password" });
             }
 
-            // Get user and roles
+            // Get user and check for MFA
             var user = await _userManager.FindByIdAsync(authResult.User.Id.ToString());
             if (user == null)
                 return Unauthorized(new { error = "invalid_grant", error_description = "User not found" });
 
+            // Check if MFA is enabled for the user
+            if (user.TwoFactorEnabled)
+            {
+                // MFA is required - create challenge token and return it instead of JWT
+                var mfaChallengeTokenService = HttpContext.RequestServices.GetRequiredService<MfaChallengeTokenService>();
+                var plainChallengeToken = MfaChallengeTokenService.GenerateChallengeToken();
+                
+                await mfaChallengeTokenService.CreateChallengeTokenAsync(
+                    user.Id,
+                    user.TenantId,
+                    plainChallengeToken,
+                    HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    HttpContext.Request.Headers["User-Agent"].ToString(),
+                    cancellationToken: cancellationToken);
+
+                // Return MFA challenge response (not a standard OAuth response, but necessary for MFA flow)
+                return Unauthorized(new
+                {
+                    error = "mfa_required",
+                    error_description = "Multi-factor authentication is required",
+                    mfa_challenge_token = plainChallengeToken,
+                    mfa_verification_url = "/api/mfa/verify"
+                });
+            }
+
+            // MFA not required - proceed with normal token generation
             var roles = await _userManager.GetRolesAsync(user);
 
             // Generate JWT token
@@ -189,7 +216,7 @@ public class OAuthController : ControllerBase
 
             await _refreshTokenService.CreateRefreshTokenAsync(
                 user.Id,
-                request.TenantId,
+                user.TenantId,
                 plainRefreshToken,
                 ipAddress,
                 userAgent,
@@ -533,12 +560,12 @@ public class OAuthController : ControllerBase
         {
             user = await _userManager.GetUserAsync(User);
         }
-        else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password) && tenantId.HasValue)
+        else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
         {
-            // Authenticate user
+            // Authenticate user (tenantId is optional - will be resolved from email domain if not provided)
             var loginRequest = new LoginRequest
             {
-                TenantId = tenantId.Value,
+                TenantId = tenantId,
                 UserNameOrEmail = username,
                 Password = password,
                 RememberMe = false

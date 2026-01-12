@@ -23,6 +23,18 @@ internal class TestAuthDbContext : BaseAuthDbContext
     }
 
     /// <summary>
+    ///     Configures the context options, suppressing transaction warnings for in-memory database
+    /// </summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        if (!optionsBuilder.IsConfigured)
+        {
+            optionsBuilder.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
+        }
+    }
+
+    /// <summary>
     ///     Sets the database name for option conversion
     /// </summary>
     public static void SetDatabaseName(string databaseName)
@@ -42,8 +54,10 @@ internal class TestAuthDbContext : BaseAuthDbContext
         var databaseName = _databaseName ?? Guid.NewGuid().ToString();
 
         // Create a new options builder for BaseAuthDbContext with the same database name
+        // IMPORTANT: Must suppress transaction warnings for in-memory database
         var builder = new DbContextOptionsBuilder<BaseAuthDbContext>();
-        builder.UseInMemoryDatabase(databaseName);
+        builder.UseInMemoryDatabase(databaseName)
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
 
         return builder.Options;
     }
@@ -69,7 +83,8 @@ public static class TestDatabaseHelper
         // TestAuthDbContext has a constructor that accepts DbContextOptions<TestAuthDbContext>
         // and converts it internally to BaseAuthDbContext options using the stored database name
         services.AddDbContext<TestAuthDbContext>(options =>
-            options.UseInMemoryDatabase(databaseName));
+            options.UseInMemoryDatabase(databaseName)
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning)));
 
         // Register BaseAuthDbContext as an alias to TestAuthDbContext for backward compatibility
         // This allows code that depends on BaseAuthDbContext to work
@@ -82,7 +97,8 @@ public static class TestDatabaseHelper
             // Create BaseAuthDbContext options using the stored database name
             // This ensures both TestAuthDbContext and BaseAuthDbContext use the same in-memory database
             var optionsBuilder = new DbContextOptionsBuilder<BaseAuthDbContext>();
-            optionsBuilder.UseInMemoryDatabase(databaseName);
+            optionsBuilder.UseInMemoryDatabase(databaseName)
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
             return optionsBuilder.Options;
         });
 
@@ -120,28 +136,70 @@ public static class TestDatabaseHelper
     }
 
     /// <summary>
+    ///     Clears all data from the database to ensure test isolation
+    ///     This should be called before each test to prevent data contamination between tests
+    /// </summary>
+    public static async Task ClearDatabaseAsync(BaseAuthDbContext context)
+    {
+        // Clear the change tracker first to detach all tracked entities
+        context.ChangeTracker.Clear();
+
+        // Remove all entities in the correct order (respecting foreign key constraints)
+        // Use AsNoTracking to avoid loading entities into the change tracker
+        
+        // Clear Identity tables first (they reference Users and Roles)
+        context.Set<Microsoft.AspNetCore.Identity.IdentityUserToken<Guid>>().RemoveRange(
+            await context.Set<Microsoft.AspNetCore.Identity.IdentityUserToken<Guid>>().AsNoTracking().ToListAsync());
+        context.Set<Microsoft.AspNetCore.Identity.IdentityUserLogin<Guid>>().RemoveRange(
+            await context.Set<Microsoft.AspNetCore.Identity.IdentityUserLogin<Guid>>().AsNoTracking().ToListAsync());
+        context.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<Guid>>().RemoveRange(
+            await context.Set<Microsoft.AspNetCore.Identity.IdentityUserClaim<Guid>>().AsNoTracking().ToListAsync());
+        context.Set<Microsoft.AspNetCore.Identity.IdentityRoleClaim<Guid>>().RemoveRange(
+            await context.Set<Microsoft.AspNetCore.Identity.IdentityRoleClaim<Guid>>().AsNoTracking().ToListAsync());
+        
+        // Clear custom entities
+        context.UserPasswordHistories.RemoveRange(await context.UserPasswordHistories.AsNoTracking().ToListAsync());
+        context.MfaChallengeTokens.RemoveRange(await context.MfaChallengeTokens.AsNoTracking().ToListAsync());
+        context.TenantEmailDomains.RemoveRange(await context.TenantEmailDomains.AsNoTracking().ToListAsync());
+        context.TenantSettings.RemoveRange(await context.TenantSettings.AsNoTracking().ToListAsync());
+        context.UserRoles.RemoveRange(await context.UserRoles.AsNoTracking().ToListAsync());
+        context.Roles.RemoveRange(await context.Roles.AsNoTracking().ToListAsync());
+        context.Users.RemoveRange(await context.Users.AsNoTracking().ToListAsync());
+        context.Tenants.RemoveRange(await context.Tenants.AsNoTracking().ToListAsync());
+        
+        await context.SaveChangesAsync();
+        
+        // Clear the change tracker again after save
+        context.ChangeTracker.Clear();
+    }
+
+    /// <summary>
     ///     Seeds the database with test data
+    ///     This method should be called after ClearDatabaseAsync to ensure a clean state
     /// </summary>
     public static async Task SeedTestDataAsync(BaseAuthDbContext context)
     {
-        // Create test tenants
+        var tenant1Id = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var tenant2Id = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
         var tenant1 = new Tenant
         {
-            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Id = tenant1Id,
             Name = "Test Tenant 1",
             CreatedAt = DateTime.UtcNow,
             IsActive = true
         };
+        context.Tenants.Add(tenant1);
 
         var tenant2 = new Tenant
         {
-            Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            Id = tenant2Id,
             Name = "Test Tenant 2",
             CreatedAt = DateTime.UtcNow,
             IsActive = true
         };
+        context.Tenants.Add(tenant2);
 
-        context.Tenants.AddRange(tenant1, tenant2);
         await context.SaveChangesAsync();
     }
 }

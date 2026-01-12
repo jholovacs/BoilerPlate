@@ -6,9 +6,10 @@ namespace BoilerPlate.Authentication.Abstractions.Models;
 public class LoginRequest
 {
     /// <summary>
-    ///     Tenant ID (UUID) - required for multi-tenancy
+    ///     Tenant ID (UUID) - optional if email domain mapping is configured
+    ///     If not provided and UserNameOrEmail is an email address, the tenant will be resolved from the email domain
     /// </summary>
-    public required Guid TenantId { get; set; }
+    public Guid? TenantId { get; set; }
 
     /// <summary>
     ///     Username or email

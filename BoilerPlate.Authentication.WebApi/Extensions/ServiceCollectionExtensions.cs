@@ -107,6 +107,9 @@ public static class ServiceCollectionExtensions
         // Data Protection is automatically registered by ASP.NET Core, but we can configure it if needed
         services.AddScoped<RefreshTokenService>();
 
+        // Register MFA challenge token service with Data Protection for encryption
+        services.AddScoped<MfaChallengeTokenService>();
+
         // Register authorization code service for OAuth2 Authorization Code Grant flow
         services.AddScoped<AuthorizationCodeService>();
         services.AddScoped<OAuthClientService>();

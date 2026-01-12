@@ -32,7 +32,7 @@ public class OAuthClientServiceTests
     ///     Tests that HashClientSecret creates a valid hash for a given secret
     /// </summary>
     [Fact]
-    public async Task HashClientSecret_WithValidSecret_ShouldCreateHash()
+    public void HashClientSecret_WithValidSecret_ShouldCreateHash()
     {
         // Arrange
         var secret = "test-secret-123";
@@ -65,7 +65,7 @@ public class OAuthClientServiceTests
     ///     Tests that VerifyClientSecret returns true for a matching secret
     /// </summary>
     [Fact]
-    public async Task VerifyClientSecret_WithMatchingSecret_ShouldReturnTrue()
+    public void VerifyClientSecret_WithMatchingSecret_ShouldReturnTrue()
     {
         // Arrange
         var secret = "test-secret-123";
@@ -90,7 +90,7 @@ public class OAuthClientServiceTests
     ///     Tests that VerifyClientSecret returns false for a non-matching secret
     /// </summary>
     [Fact]
-    public async Task VerifyClientSecret_WithNonMatchingSecret_ShouldReturnFalse()
+    public void VerifyClientSecret_WithNonMatchingSecret_ShouldReturnFalse()
     {
         // Arrange
         var secret = "test-secret-123";

@@ -26,10 +26,10 @@ public class OAuthTokenRequest
     public string Password { get; set; } = string.Empty;
 
     /// <summary>
-    ///     Tenant identifier (UUID) required for multi-tenant applications.
+    ///     Tenant identifier (UUID) - optional if email domain mapping is configured.
+    ///     If not provided and Username is an email address, the tenant will be resolved from the email domain.
     /// </summary>
-    [Required]
-    public Guid TenantId { get; set; }
+    public Guid? TenantId { get; set; }
 
     /// <summary>
     ///     Optional space-delimited list of scope values (e.g., "api.read api.write").

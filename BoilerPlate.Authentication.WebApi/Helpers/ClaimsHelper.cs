@@ -57,7 +57,7 @@ public static class ClaimsHelper
                       ?? user.FindFirst(ClaimTypes.Name)?.Value
                       ?? user.FindFirst("name")?.Value
                       ?? user.FindFirst("username")?.Value
-                      ?? user.Identity.Name;
+                      ?? user.Identity?.Name;
 
         return string.IsNullOrWhiteSpace(username) ? null : username;
     }
