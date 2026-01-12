@@ -38,13 +38,22 @@ jobs:
       run: |
         dotnet test BoilerPlate.sln \
           --configuration Release \
-          --no-restore \
+          --no-build \
           --verbosity normal \
           --collect:"XPlat Code Coverage" \
           --results-directory:"${{ github.workspace }}/TestResults" \
-          --logger:"trx" \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=coverage,cobertura \
+          --logger:"trx;LogFileName=test-results.trx" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura,json,lcov \
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByAttribute="Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute"
+      
+    - name: List coverage files
+      if: always()
+      run: |
+        echo "Searching for coverage files in TestResults directory..."
+        find "${{ github.workspace }}/TestResults" -type f -name "*.xml" -o -name "*.json" -o -name "*.cobertura" 2>/dev/null | head -20 || echo "No coverage files found"
+        echo ""
+        echo "TestResults directory structure:"
+        find "${{ github.workspace }}/TestResults" -type f 2>/dev/null | head -20 || echo "TestResults directory not found"
       
     - name: Publish test results
       if: always()
@@ -57,12 +66,27 @@ jobs:
       
     - name: Generate coverage report
       if: always()
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
-      with:
-        reports: '${{ github.workspace }}/TestResults/**/coverage.cobertura.xml'
-        targetdir: '${{ github.workspace }}/CoverageReport'
-        reporttypes: 'Html;Badges;JsonSummary;Cobertura'
-        verbosity: 'Info'
+      run: |
+        # Find all coverage files
+        COVERAGE_FILES=$(find "${{ github.workspace }}/TestResults" -name "coverage.cobertura.xml" -o -name "coverage.xml" -o -name "*.cobertura.xml" 2>/dev/null | tr '\n' ';' | sed 's/;$//')
+        
+        if [ -z "$COVERAGE_FILES" ]; then
+          echo "⚠️ No coverage files found. Skipping report generation."
+          exit 0
+        fi
+        
+        echo "Found coverage files: $COVERAGE_FILES"
+        
+        # Install ReportGenerator
+        dotnet tool install -g dotnet-reportgenerator-globaltool
+        
+        # Generate report
+        reportgenerator \
+          -reports:"$COVERAGE_FILES" \
+          -targetdir:"${{ github.workspace }}/CoverageReport" \
+          -reporttypes:"Html;Badges;JsonSummary;Cobertura" \
+          -verbosity:"Info" \
+          -classfilters:"-*Tests*;-*Test*"
       
     - name: Upload test results artifact
       if: always()
@@ -79,6 +103,7 @@ jobs:
         name: coverage-report
         path: '${{ github.workspace }}/CoverageReport'
         retention-days: 30
+        if-no-files-found: ignore
         
     - name: Coverage summary
       if: always()
@@ -88,8 +113,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.linecoverage')
+          COVERAGE=$(jq -r '.summary.linecoverage // .linecoverage // 0' "${{ github.workspace }}/CoverageReport/Summary.json" 2>/dev/null || echo "0")
           echo "| Line Coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
-          BRANCH_COVERAGE=$(cat "${{ github.workspace }}/CoverageReport/Summary.json" | jq -r '.summary.branchcoverage')
+          BRANCH_COVERAGE=$(jq -r '.summary.branchcoverage // .branchcoverage // 0' "${{ github.workspace }}/CoverageReport/Summary.json" 2>/dev/null || echo "0")
           echo "| Branch Coverage | ${BRANCH_COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ Coverage report not available. This may be because no tests ran or coverage collection failed." >> $GITHUB_STEP_SUMMARY
         fi

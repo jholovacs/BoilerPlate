@@ -10,6 +10,11 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -145,12 +150,24 @@ jobs:
           
           Coverage report and detailed statistics are available in the workflow artifacts.`;
           
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: body
-          });
+          try {
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+            console.log('Successfully posted coverage comment to PR');
+          } catch (error) {
+            console.error('Failed to post coverage comment to PR:', error.message);
+            if (error.status) {
+              console.error(`HTTP Status: ${error.status}`);
+            }
+            if (error.response) {
+              console.error('Response:', JSON.stringify(error.response.data, null, 2));
+            }
+            throw error; // Fail the step so the error is visible in the workflow
+          }
           
     - name: Summary
       run: |
