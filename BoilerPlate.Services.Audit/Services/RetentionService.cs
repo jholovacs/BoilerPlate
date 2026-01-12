@@ -305,11 +305,11 @@ public class RetentionService
                 new BsonDocument("$group", new BsonDocument("_id", "$Properties.tenantId"))
             };
 
-            var cursor = await collection.AggregateAsync<BsonDocument>(
+            var tenantIds = new List<Guid?>();
+            using var cursor = await collection.AggregateAsync<BsonDocument>(
                 pipeline,
                 cancellationToken: cancellationToken);
 
-            var tenantIds = new List<Guid?>();
             while (await cursor.MoveNextAsync(cancellationToken))
             {
                 foreach (var doc in cursor.Current)
