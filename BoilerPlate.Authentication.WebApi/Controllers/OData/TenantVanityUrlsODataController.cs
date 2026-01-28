@@ -13,34 +13,34 @@ using Microsoft.EntityFrameworkCore;
 namespace BoilerPlate.Authentication.WebApi.Controllers.OData;
 
 /// <summary>
-///     OData controller for TenantEmailDomains
+///     OData controller for TenantVanityUrls
 ///     Accessible by Service Administrators (all tenants) or Tenant Administrators (their tenant only)
 /// </summary>
 [Authorize(Policy = AuthorizationPolicies.ODataAccess)]
 [Route("odata")]
 [ODataRouteComponent("odata")]
-public class TenantEmailDomainsODataController : ODataController
+public class TenantVanityUrlsODataController : ODataController
 {
     private readonly BaseAuthDbContext _context;
-    private readonly ILogger<TenantEmailDomainsODataController> _logger;
+    private readonly ILogger<TenantVanityUrlsODataController> _logger;
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="TenantEmailDomainsODataController" /> class
+    ///     Initializes a new instance of the <see cref="TenantVanityUrlsODataController" /> class
     /// </summary>
-    public TenantEmailDomainsODataController(
+    public TenantVanityUrlsODataController(
         BaseAuthDbContext context,
-        ILogger<TenantEmailDomainsODataController> logger)
+        ILogger<TenantVanityUrlsODataController> logger)
     {
         _context = context;
         _logger = logger;
     }
 
     /// <summary>
-    ///     Gets tenant email domains with OData query support
-    ///     Service Administrators can see all domains, Tenant Administrators only see their tenant's domains
+    ///     Gets tenant vanity URLs with OData query support
+    ///     Service Administrators can see all vanity URLs, Tenant Administrators only see their tenant's vanity URLs
     /// </summary>
     [EnableQuery]
-    [Route("TenantEmailDomains")]
+    [Route("TenantVanityUrls")]
     [HttpGet]
     public IActionResult Get()
     {
@@ -48,31 +48,31 @@ public class TenantEmailDomainsODataController : ODataController
         var isServiceAdmin = user.IsInRole("Service Administrator");
         var tenantId = ClaimsHelper.GetTenantId(user);
 
-        var query = _context.TenantEmailDomains.AsQueryable();
+        var query = _context.TenantVanityUrls.AsQueryable();
 
-        // Tenant Administrators can only see their tenant's domains
+        // Tenant Administrators can only see their tenant's vanity URLs
         if (!isServiceAdmin && tenantId.HasValue)
         {
-            query = query.Where(d => d.TenantId == tenantId.Value);
-            _logger.LogInformation("OData TenantEmailDomains query filtered by tenant {TenantId}", tenantId.Value);
+            query = query.Where(v => v.TenantId == tenantId.Value);
+            _logger.LogInformation("OData TenantVanityUrls query filtered by tenant {TenantId}", tenantId.Value);
         }
         else if (!isServiceAdmin)
         {
             // Tenant Administrator without tenant ID - return empty
-            return Ok(Enumerable.Empty<TenantEmailDomain>().AsQueryable());
+            return Ok(Enumerable.Empty<TenantVanityUrl>().AsQueryable());
         }
 
         // Include navigation properties
-        query = query.Include(d => d.Tenant);
+        query = query.Include(v => v.Tenant);
 
         return Ok(query);
     }
 
     /// <summary>
-    ///     Gets a single tenant email domain by key
+    ///     Gets a single tenant vanity URL by key
     /// </summary>
     [EnableQuery]
-    [Route("TenantEmailDomains({key})")]
+    [Route("TenantVanityUrls({key})")]
     [HttpGet]
     public async Task<IActionResult> Get([FromODataUri] Guid key)
     {
@@ -80,32 +80,32 @@ public class TenantEmailDomainsODataController : ODataController
         var isServiceAdmin = user.IsInRole("Service Administrator");
         var tenantId = ClaimsHelper.GetTenantId(user);
 
-        var query = _context.TenantEmailDomains
-            .Include(d => d.Tenant)
+        var query = _context.TenantVanityUrls
+            .Include(v => v.Tenant)
             .AsQueryable();
 
-        // Tenant Administrators can only access their tenant's domains
+        // Tenant Administrators can only access their tenant's vanity URLs
         if (!isServiceAdmin && tenantId.HasValue)
-            query = query.Where(d => d.TenantId == tenantId.Value);
+            query = query.Where(v => v.TenantId == tenantId.Value);
         else if (!isServiceAdmin) return NotFound();
 
-        var domainEntity = await query.FirstOrDefaultAsync(d => d.Id == key);
+        var vanityUrlEntity = await query.FirstOrDefaultAsync(v => v.Id == key);
 
-        if (domainEntity == null) return NotFound();
+        if (vanityUrlEntity == null) return NotFound();
 
-        return Ok(domainEntity);
+        return Ok(vanityUrlEntity);
     }
 
     /// <summary>
-    ///     Gets tenant email domains with OData query support via POST (for long queries that exceed URL length limitations)
+    ///     Gets tenant vanity URLs with OData query support via POST (for long queries that exceed URL length limitations)
     ///     Accepts OData query options in the request body as plain text (Content-Type: text/plain) or JSON
-    ///     Service Administrators can see all domains, Tenant Administrators only see their tenant's domains
+    ///     Service Administrators can see all vanity URLs, Tenant Administrators only see their tenant's vanity URLs
     /// </summary>
     /// <returns>Query results with OData query options applied</returns>
     /// <response code="200">Query results</response>
     /// <response code="400">Invalid query string</response>
     /// <response code="401">Unauthorized</response>
-    [Route("/api/odata/TenantEmailDomains/query")]
+    [Route("/api/odata/TenantVanityUrls/query")]
     [HttpPost]
     [Consumes("text/plain", "application/json")]
     public async Task<IActionResult> PostQuery()
@@ -114,22 +114,22 @@ public class TenantEmailDomainsODataController : ODataController
         var isServiceAdmin = user.IsInRole("Service Administrator");
         var tenantId = ClaimsHelper.GetTenantId(user);
 
-        var query = _context.TenantEmailDomains.AsQueryable();
+        var query = _context.TenantVanityUrls.AsQueryable();
 
-        // Tenant Administrators can only see their tenant's domains
+        // Tenant Administrators can only see their tenant's vanity URLs
         if (!isServiceAdmin && tenantId.HasValue)
         {
-            query = query.Where(d => d.TenantId == tenantId.Value);
-            _logger.LogInformation("OData TenantEmailDomains query (POST) filtered by tenant {TenantId}", tenantId.Value);
+            query = query.Where(v => v.TenantId == tenantId.Value);
+            _logger.LogInformation("OData TenantVanityUrls query (POST) filtered by tenant {TenantId}", tenantId.Value);
         }
         else if (!isServiceAdmin)
         {
             // Tenant Administrator without tenant ID - return empty
-            return Ok(Enumerable.Empty<TenantEmailDomain>().AsQueryable());
+            return Ok(Enumerable.Empty<TenantVanityUrl>().AsQueryable());
         }
 
         // Include navigation properties
-        query = query.Include(d => d.Tenant);
+        query = query.Include(v => v.Tenant);
 
         // Read query string from request body
         var queryStringFromBody = await ODataQueryHelper.ReadQueryStringFromBodyAsync(Request);
@@ -139,7 +139,7 @@ public class TenantEmailDomainsODataController : ODataController
         {
             var edmModel = ODataConfiguration.GetEdmModel();
             query = ODataQueryHelper.ApplyQueryFromBody(query, queryStringFromBody, HttpContext, edmModel,
-                "TenantEmailDomains");
+                "TenantVanityUrls");
         }
 
         return Ok(query);

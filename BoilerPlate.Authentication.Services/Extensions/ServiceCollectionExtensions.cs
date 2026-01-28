@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ISaml2Service, Saml2Service>();
         services.AddScoped<ITenantEmailDomainService, TenantEmailDomainService>();
+        services.AddScoped<ITenantVanityUrlService, TenantVanityUrlService>();
         services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
 

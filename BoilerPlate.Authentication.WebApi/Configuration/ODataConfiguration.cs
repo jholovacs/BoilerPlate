@@ -107,6 +107,19 @@ public static class ODataConfiguration
         // Configure navigation property
         tenantEmailDomainsEntitySet.EntityType.HasOptional(d => d.Tenant);
 
+        // Configure TenantVanityUrls entity set
+        var tenantVanityUrlsEntitySet = builder.EntitySet<TenantVanityUrl>("TenantVanityUrls");
+        tenantVanityUrlsEntitySet.EntityType.HasKey(v => v.Id);
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.TenantId).IsRequired();
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.Hostname).IsRequired();
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.Description);
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.IsActive);
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.CreatedAt).IsRequired();
+        tenantVanityUrlsEntitySet.EntityType.Property(v => v.UpdatedAt);
+
+        // Configure navigation property
+        tenantVanityUrlsEntitySet.EntityType.HasOptional(v => v.Tenant);
+
         return builder.GetEdmModel();
     }
 }

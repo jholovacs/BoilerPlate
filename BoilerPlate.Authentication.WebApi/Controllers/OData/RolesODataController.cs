@@ -106,7 +106,7 @@ public class RolesODataController : ODataController
     /// <response code="200">Query results</response>
     /// <response code="400">Invalid query string</response>
     /// <response code="401">Unauthorized</response>
-    [Route("Roles/$query")]
+    [Route("/api/odata/Roles/query")]
     [HttpPost]
     [Consumes("text/plain", "application/json")]
     public async Task<IActionResult> PostQuery()

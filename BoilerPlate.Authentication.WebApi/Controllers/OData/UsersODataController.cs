@@ -107,7 +107,7 @@ public class UsersODataController : ODataController
     /// <response code="200">Query results</response>
     /// <response code="400">Invalid query string</response>
     /// <response code="401">Unauthorized</response>
-    [Route("Users/$query")]
+    [Route("/api/odata/Users/query")]
     [HttpPost]
     [Consumes("text/plain", "application/json")]
     public async Task<IActionResult> PostQuery()

@@ -22,6 +22,7 @@ public class AuthenticationService : IAuthenticationService
     private readonly IQueuePublisher? _queuePublisher;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly ITenantEmailDomainService? _tenantEmailDomainService;
+    private readonly ITenantVanityUrlService? _tenantVanityUrlService;
     private readonly ITopicPublisher? _topicPublisher;
     private readonly UserManager<ApplicationUser> _userManager;
 
@@ -35,6 +36,7 @@ public class AuthenticationService : IAuthenticationService
         ITopicPublisher? topicPublisher = null,
         IQueuePublisher? queuePublisher = null,
         ITenantEmailDomainService? tenantEmailDomainService = null,
+        ITenantVanityUrlService? tenantVanityUrlService = null,
         IPasswordPolicyService? passwordPolicyService = null,
         ILogger<AuthenticationService>? logger = null)
     {
@@ -44,6 +46,7 @@ public class AuthenticationService : IAuthenticationService
         _topicPublisher = topicPublisher;
         _queuePublisher = queuePublisher;
         _tenantEmailDomainService = tenantEmailDomainService;
+        _tenantVanityUrlService = tenantVanityUrlService;
         _passwordPolicyService = passwordPolicyService;
         _logger = logger;
     }
@@ -182,8 +185,23 @@ public class AuthenticationService : IAuthenticationService
         var tenantId = request.TenantId;
         if (!tenantId.HasValue)
         {
-            // Try to resolve tenant from email domain if UserNameOrEmail looks like an email
-            if (request.UserNameOrEmail.Contains('@') && _tenantEmailDomainService != null)
+            // First, try to resolve tenant from vanity URL hostname if Host is provided
+            if (!string.IsNullOrWhiteSpace(request.Host) && _tenantVanityUrlService != null)
+            {
+                var resolvedTenantId = await _tenantVanityUrlService.ResolveTenantIdFromHostnameAsync(
+                    request.Host,
+                    cancellationToken);
+
+                if (resolvedTenantId.HasValue)
+                {
+                    tenantId = resolvedTenantId;
+                    _logger?.LogDebug("Resolved tenant {TenantId} from vanity URL hostname {Hostname}", tenantId.Value,
+                        request.Host);
+                }
+            }
+
+            // If still not resolved, try to resolve tenant from email domain if UserNameOrEmail looks like an email
+            if (!tenantId.HasValue && request.UserNameOrEmail.Contains('@') && _tenantEmailDomainService != null)
             {
                 var resolvedTenantId = await _tenantEmailDomainService.ResolveTenantIdFromEmailAsync(
                     request.UserNameOrEmail,
@@ -195,24 +213,32 @@ public class AuthenticationService : IAuthenticationService
                     _logger?.LogDebug("Resolved tenant {TenantId} from email domain for user {Email}", tenantId.Value,
                         request.UserNameOrEmail);
                 }
-                else
-                {
-                    return new AuthResult
-                    {
-                        Succeeded = false,
-                        Errors = new[]
-                        {
-                            "Tenant ID is required. Unable to resolve tenant from email domain. Please specify tenant_id or ensure your email domain is configured."
-                        }
-                    };
-                }
             }
-            else
+
+            // If still not resolved, return error
+            if (!tenantId.HasValue)
             {
+                var errorMessages = new List<string>();
+                
+                if (!string.IsNullOrWhiteSpace(request.Host))
+                {
+                    errorMessages.Add("Unable to resolve tenant from vanity URL hostname. Please specify tenant_id or ensure your vanity URL is configured.");
+                }
+                
+                if (request.UserNameOrEmail.Contains('@'))
+                {
+                    errorMessages.Add("Unable to resolve tenant from email domain. Please specify tenant_id or ensure your email domain is configured.");
+                }
+                
+                if (!request.UserNameOrEmail.Contains('@') && string.IsNullOrWhiteSpace(request.Host))
+                {
+                    errorMessages.Add("Tenant ID is required when using username without vanity URL. Please specify tenant_id.");
+                }
+
                 return new AuthResult
                 {
                     Succeeded = false,
-                    Errors = new[] { "Tenant ID is required when using username. Please specify tenant_id." }
+                    Errors = errorMessages
                 };
             }
         }
@@ -224,19 +250,27 @@ public class AuthenticationService : IAuthenticationService
                 cancellationToken);
 
         if (user == null)
+        {
+            _logger?.LogWarning("Login failed: User not found. UsernameOrEmail: {UserNameOrEmail}, TenantId: {TenantId}",
+                request.UserNameOrEmail, tenantId.Value);
             return new AuthResult
             {
                 Succeeded = false,
                 Errors = new[] { "Invalid username or password." }
             };
+        }
 
         // Check if user is active
         if (!user.IsActive)
+        {
+            _logger?.LogWarning("Login failed: User account is inactive. UserId: {UserId}, UsernameOrEmail: {UserNameOrEmail}, TenantId: {TenantId}",
+                user.Id, request.UserNameOrEmail, tenantId.Value);
             return new AuthResult
             {
                 Succeeded = false,
                 Errors = new[] { "User account is inactive." }
             };
+        }
 
         // Attempt sign in
         var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, true);
@@ -245,11 +279,23 @@ public class AuthenticationService : IAuthenticationService
         {
             var errors = new List<string>();
             if (result.IsLockedOut)
+            {
+                _logger?.LogWarning("Login failed: User account is locked out. UserId: {UserId}, UsernameOrEmail: {UserNameOrEmail}, TenantId: {TenantId}",
+                    user.Id, request.UserNameOrEmail, tenantId.Value);
                 errors.Add("User account is locked out.");
+            }
             else if (result.IsNotAllowed)
+            {
+                _logger?.LogWarning("Login failed: User is not allowed to sign in. UserId: {UserId}, UsernameOrEmail: {UserNameOrEmail}, TenantId: {TenantId}",
+                    user.Id, request.UserNameOrEmail, tenantId.Value);
                 errors.Add("User is not allowed to sign in.");
+            }
             else
+            {
+                _logger?.LogWarning("Login failed: Invalid password. UserId: {UserId}, UsernameOrEmail: {UserNameOrEmail}, TenantId: {TenantId}",
+                    user.Id, request.UserNameOrEmail, tenantId.Value);
                 errors.Add("Invalid username or password.");
+            }
 
             return new AuthResult
             {

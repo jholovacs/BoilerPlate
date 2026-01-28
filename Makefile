@@ -1,4 +1,4 @@
-.PHONY: help setup setup-keys setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker docker-up docker-up-webapi docker-up-audit docker-down docker-build rebuild-webapi rebuild-audit redeploy docker-logs docker-logs-webapi docker-logs-audit clean verify
+.PHONY: help setup setup-keys setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-frontend clean verify
 
 # Detect OS
 UNAME_S := $(shell uname -s)
@@ -119,10 +119,11 @@ help: ## Show this help message
 	@echo "  Database: $(POSTGRES_DB)"
 	@echo "  (Override with: make setup POSTGRES_PASSWORD=YourPassword)"
 
-setup: verify-prerequisites setup-keys setup-env setup-volumes ensure-services build-webapi-project build-audit-project run-migration rebuild-webapi-docker rebuild-audit-docker docker-up-webapi docker-up-audit ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
+setup: verify-prerequisites setup-keys setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
 	@echo "$(GREEN)✓ Setup complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs:$(NC)"
+	@echo "  - Frontend: http://localhost:4200"
 	@echo "  - Web API: http://localhost:8080"
 	@echo "  - Swagger UI: http://localhost:8080/swagger"
 	@echo "  - RabbitMQ Management: http://localhost:15672 (admin/SecurePassword123!)"
@@ -435,6 +436,37 @@ build-audit-project: ## Build the audit service .NET project (dotnet build)
 		exit 1; \
 	fi
 
+build-frontend-project: ## Build the frontend Angular project (npm install and build)
+	@echo "$(YELLOW)Building frontend Angular project...$(NC)"
+	@if ! command -v node > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ Node.js is not installed. Please install Node.js 18+ first.$(NC)"; \
+		echo "$(YELLOW)  Frontend build will be skipped. Docker build will handle it.$(NC)"; \
+		exit 0; \
+	fi
+	@if ! command -v npm > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ npm is not installed. Please install npm first.$(NC)"; \
+		echo "$(YELLOW)  Frontend build will be skipped. Docker build will handle it.$(NC)"; \
+		exit 0; \
+	fi
+	@if [ ! -d "BoilerPlate.Frontend" ]; then \
+		echo "$(YELLOW)  ⚠ Frontend directory not found. Skipping frontend build.$(NC)"; \
+		exit 0; \
+	fi
+	@cd BoilerPlate.Frontend && \
+	if [ ! -d "node_modules" ]; then \
+		echo "$(YELLOW)  Installing npm dependencies...$(NC)"; \
+		npm install 2>&1 || { \
+			echo "$(YELLOW)  ⚠ npm install failed. Docker build will handle dependencies.$(NC)"; \
+			exit 0; \
+		}; \
+	fi && \
+	echo "$(YELLOW)  Building Angular application...$(NC)" && \
+	npm run build 2>&1 || { \
+		echo "$(YELLOW)  ⚠ npm build failed. Docker build will handle it.$(NC)"; \
+		exit 0; \
+	} && \
+	echo "$(GREEN)  ✓ Frontend project built successfully$(NC)"
+
 ensure-postgres: ## Ensure PostgreSQL service is running (starts it if needed)
 	@echo "$(YELLOW)Ensuring PostgreSQL is running...$(NC)"
 	@if docker ps --filter "name=postgres-auth" --format "{{.Names}}" | grep -q "postgres-auth"; then \
@@ -596,6 +628,24 @@ docker-up-audit: ## Start only the audit service (assumes other services are alr
 	fi
 	@echo "$(GREEN)✓ Audit service started$(NC)"
 
+docker-up-frontend: ## Start only the frontend service (assumes other services are already running)
+	@echo "$(YELLOW)Starting frontend service...$(NC)"
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		docker-compose up -d --no-deps frontend 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker-compose up -d frontend 2>&1; \
+		}; \
+	elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+		docker compose up -d --no-deps frontend 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker compose up -d frontend 2>&1; \
+		}; \
+	else \
+		echo "$(RED)  ✗ Docker Compose is not available$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ Frontend service started$(NC)"
+
 docker-down: ## Stop all Docker services
 	@echo "$(YELLOW)Stopping Docker services...$(NC)"
 	@docker-compose down || docker compose down
@@ -728,10 +778,11 @@ rebuild-audit-image: ## Build the audit service Docker image without ensuring se
 		exit 1; \
 	fi
 
-redeploy: build-webapi-project build-audit-project migrate-only rebuild-webapi-image rebuild-audit-image docker-up-webapi docker-up-audit ## Rebuild code, run migrations, and redeploy webapi and audit service (leaves third-party services unchanged)
+redeploy: build-webapi-project build-audit-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, and frontend services (leaves third-party services unchanged)
 	@echo "$(GREEN)✓ Redeploy complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs:$(NC)"
+	@echo "  - Frontend: http://localhost:4200"
 	@echo "  - Web API: http://localhost:8080"
 	@echo "  - Swagger UI: http://localhost:8080/swagger"
 
@@ -815,9 +866,36 @@ rebuild-audit-docker: ensure-services ## Build the audit service Docker image an
 
 rebuild-audit: rebuild-audit-docker ## Rebuild the audit service Docker image (alias for rebuild-audit-docker)
 
-docker-build: rebuild-webapi-docker rebuild-audit-docker ## Build and start the webapi and audit services
+rebuild-frontend-docker: ## Build the frontend Docker image
+	@echo "$(YELLOW)Rebuilding frontend Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(YELLOW)  ⚠ Docker is not running. Skipping image rebuild.$(NC)"; \
+		echo "$(YELLOW)  Start Docker Desktop and run 'make rebuild-frontend-docker' to rebuild the image$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps --filter "name=boilerplate-frontend" --format "{{.Names}}" | grep -q "boilerplate-frontend"; then \
+		echo "$(YELLOW)  Stopping existing frontend container...$(NC)"; \
+		docker-compose stop frontend 2>/dev/null || docker compose stop frontend 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building frontend image...$(NC)"
+	@if command -v docker > /dev/null 2>&1; then \
+		if docker build -f BoilerPlate.Frontend/Dockerfile -t boilerplate-frontend:latest . 2>&1; then \
+			echo "$(GREEN)  ✓ Frontend image built successfully$(NC)"; \
+		else \
+			BUILD_EXIT=$$?; \
+			echo "$(RED)  ✗ Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(YELLOW)  ⚠ Docker not available. Skipping rebuild.$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-frontend: rebuild-frontend-docker ## Rebuild the frontend Docker image (alias for rebuild-frontend-docker)
+
+docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-frontend-docker ## Build and start the webapi, audit, and frontend services
 	@echo "$(YELLOW)Starting services...$(NC)"
-	@docker-compose up -d webapi audit || docker compose up -d webapi audit || true
+	@docker-compose up -d webapi audit frontend || docker compose up -d webapi audit frontend || true
 	@echo "$(GREEN)✓ Services rebuilt and started$(NC)"
 
 docker-logs: ## View logs from all services
@@ -828,6 +906,9 @@ docker-logs-webapi: ## View logs from webapi service only
 
 docker-logs-audit: ## View logs from audit service only
 	@docker-compose logs -f audit || docker compose logs -f audit
+
+docker-logs-frontend: ## View logs from frontend service only
+	@docker-compose logs -f frontend || docker compose logs -f frontend
 
 verify: ## Verify the setup
 	@echo "$(YELLOW)Verifying setup...$(NC)"
@@ -855,6 +936,7 @@ verify: ## Verify the setup
 	@docker ps --filter "name=mongodb-logs" --format "{{.Names}}" | grep -q "mongodb-logs" && echo "$(GREEN)  ✓ MongoDB is running$(NC)" || echo "$(YELLOW)  ○ MongoDB is not running$(NC)"
 	@docker ps --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector" && echo "$(GREEN)  ✓ OTEL Collector is running$(NC)" || echo "$(YELLOW)  ○ OTEL Collector is not running$(NC)"
 	@docker ps --filter "name=boilerplate-auth-api" --format "{{.Names}}" | grep -q "boilerplate-auth-api" && echo "$(GREEN)  ✓ WebAPI is running$(NC)" || echo "$(YELLOW)  ○ WebAPI is not running$(NC)"
+	@docker ps --filter "name=boilerplate-frontend" --format "{{.Names}}" | grep -q "boilerplate-frontend" && echo "$(GREEN)  ✓ Frontend is running$(NC)" || echo "$(YELLOW)  ○ Frontend is not running$(NC)"
 
 clean: ## Remove generated files (keeps JWT keys)
 	@echo "$(YELLOW)Cleaning generated files...$(NC)"

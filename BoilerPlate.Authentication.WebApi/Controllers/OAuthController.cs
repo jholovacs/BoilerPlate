@@ -89,158 +89,199 @@ public class OAuthController : ControllerBase
     [ProducesResponseType(typeof(OAuthTokenResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Token(CancellationToken cancellationToken)
     {
-        // Ensure request body is at the start and can be read
-        if (Request.Body.CanSeek)
+        try
         {
-            Request.Body.Position = 0;
-        }
-        else
-        {
-            Request.EnableBuffering();
-            Request.Body.Position = 0;
-        }
-
-        // Determine grant type and parse request based on content type
-        string? grantType = null;
-        OAuthTokenRequest? request = null;
-
-        if (Request.HasFormContentType)
-        {
-            // Form-encoded request (used for authorization_code grant)
-            grantType = Request.Form["grant_type"].ToString();
-
-            // If it's authorization_code grant, handle it immediately
-            if (grantType == "authorization_code") return await HandleAuthorizationCodeGrant(cancellationToken);
-
-            // For password grant in form format, parse from form data
-            if (grantType == "password")
-                request = new OAuthTokenRequest
-                {
-                    GrantType = grantType,
-                    Username = Request.Form["username"].ToString(),
-                    Password = Request.Form["password"].ToString(),
-                    TenantId = Guid.TryParse(Request.Form["tenant_id"].ToString(), out var tid) ? tid : Guid.Empty,
-                    Scope = Request.Form["scope"].ToString()
-                };
-        }
-        else
-        {
-            // JSON request - read the body once
-            request = await Request.ReadFromJsonAsync<OAuthTokenRequest>(cancellationToken);
-            if (request != null) grantType = request.GrantType;
-        }
-
-        if (string.IsNullOrWhiteSpace(grantType))
-            return BadRequest(new { error = "invalid_request", error_description = "grant_type is required" });
-
-        // Handle authorization code grant (should have been handled above, but check again)
-        if (grantType == "authorization_code")
-            return BadRequest(new
+            // Ensure request body is at the start and can be read
+            if (Request.Body.CanSeek)
             {
-                error = "invalid_request",
-                error_description =
-                    "Authorization code grant requires form-encoded request body. Use Content-Type: application/x-www-form-urlencoded"
-            });
-
-        // Handle password grant (can be JSON or form-encoded)
-        if (grantType == "password")
-        {
-            if (request == null)
-                return BadRequest(new { error = "invalid_request", error_description = "Invalid request body" });
-
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-                return BadRequest(new
-                    { error = "invalid_request", error_description = "Username and password are required" });
-
-            // Authenticate user
-            var loginRequest = new LoginRequest
+                Request.Body.Position = 0;
+            }
+            else
             {
-                TenantId = request.TenantId,
-                UserNameOrEmail = request.Username,
-                Password = request.Password,
-                RememberMe = false
-            };
-
-            var authResult = await _authenticationService.LoginAsync(loginRequest, cancellationToken);
-
-            if (!authResult.Succeeded || authResult.User == null)
-            {
-                _logger.LogWarning("Failed authentication attempt for user: {Username} in tenant: {TenantId}",
-                    request.Username, request.TenantId);
-                return Unauthorized(new
-                    { error = "invalid_grant", error_description = authResult.Errors?.FirstOrDefault() ?? "Invalid username or password" });
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
             }
 
-            // Get user and check for MFA
-            var user = await _userManager.FindByIdAsync(authResult.User.Id.ToString());
-            if (user == null)
-                return Unauthorized(new { error = "invalid_grant", error_description = "User not found" });
+            // Determine grant type and parse request based on content type
+            string? grantType = null;
+            OAuthTokenRequest? request = null;
 
-            // Check if MFA is enabled for the user
-            if (user.TwoFactorEnabled)
+            if (Request.HasFormContentType)
             {
-                // MFA is required - create challenge token and return it instead of JWT
-                var mfaChallengeTokenService = HttpContext.RequestServices.GetRequiredService<MfaChallengeTokenService>();
-                var plainChallengeToken = MfaChallengeTokenService.GenerateChallengeToken();
-                
-                await mfaChallengeTokenService.CreateChallengeTokenAsync(
+                // Form-encoded request (used for authorization_code grant)
+                grantType = Request.Form["grant_type"].ToString();
+
+                // If it's authorization_code grant, handle it immediately
+                if (grantType == "authorization_code") return await HandleAuthorizationCodeGrant(cancellationToken);
+
+                // For password grant in form format, parse from form data
+                if (grantType == "password")
+                    request = new OAuthTokenRequest
+                    {
+                        GrantType = grantType,
+                        Username = Request.Form["username"].ToString(),
+                        Password = Request.Form["password"].ToString(),
+                        TenantId = Guid.TryParse(Request.Form["tenant_id"].ToString(), out var tid) ? tid : null,
+                        Scope = Request.Form["scope"].ToString()
+                    };
+            }
+            else
+            {
+                // JSON request - read the body once
+                request = await Request.ReadFromJsonAsync<OAuthTokenRequest>(cancellationToken);
+                if (request != null) grantType = request.GrantType;
+            }
+
+            if (string.IsNullOrWhiteSpace(grantType))
+                return BadRequest(new { error = "invalid_request", error_description = "grant_type is required" });
+
+            // Handle authorization code grant (should have been handled above, but check again)
+            if (grantType == "authorization_code")
+                return BadRequest(new
+                {
+                    error = "invalid_request",
+                    error_description =
+                        "Authorization code grant requires form-encoded request body. Use Content-Type: application/x-www-form-urlencoded"
+                });
+
+            // Handle password grant (can be JSON or form-encoded)
+            if (grantType == "password")
+            {
+                if (request == null)
+                    return BadRequest(new { error = "invalid_request", error_description = "Invalid request body" });
+
+                if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+                    return BadRequest(new
+                        { error = "invalid_request", error_description = "Username and password are required" });
+
+                // Extract hostname from request for vanity URL resolution
+                var hostname = Request.Host.Value; // e.g., "tenant1.foo.org" or "tenant1.foo.org:8080"
+
+                // Authenticate user
+                var loginRequest = new LoginRequest
+                {
+                    TenantId = request.TenantId,
+                    Host = hostname,
+                    UserNameOrEmail = request.Username,
+                    Password = request.Password,
+                    RememberMe = false
+                };
+
+                var authResult = await _authenticationService.LoginAsync(loginRequest, cancellationToken);
+
+                if (!authResult.Succeeded || authResult.User == null)
+                {
+                    _logger.LogWarning("Failed authentication attempt for user: {Username} in tenant: {TenantId}",
+                        request.Username, request.TenantId);
+                    return Unauthorized(new
+                        { error = "invalid_grant", error_description = authResult.Errors?.FirstOrDefault() ?? "Invalid username or password" });
+                }
+
+                // Get user and check for MFA
+                var user = await _userManager.FindByIdAsync(authResult.User.Id.ToString());
+                if (user == null)
+                    return Unauthorized(new { error = "invalid_grant", error_description = "User not found" });
+
+                // Check if MFA is enabled for the user
+                if (user.TwoFactorEnabled)
+                {
+                    // MFA is required - create challenge token and return it instead of JWT
+                    var mfaChallengeTokenService = HttpContext.RequestServices.GetRequiredService<MfaChallengeTokenService>();
+                    var plainChallengeToken = MfaChallengeTokenService.GenerateChallengeToken();
+                    
+                    await mfaChallengeTokenService.CreateChallengeTokenAsync(
+                        user.Id,
+                        user.TenantId,
+                        plainChallengeToken,
+                        HttpContext.Connection.RemoteIpAddress?.ToString(),
+                        HttpContext.Request.Headers["User-Agent"].ToString(),
+                        cancellationToken: cancellationToken);
+
+                    // Return MFA challenge response (not a standard OAuth response, but necessary for MFA flow)
+                    return Unauthorized(new
+                    {
+                        error = "mfa_required",
+                        error_description = "Multi-factor authentication is required",
+                        mfa_challenge_token = plainChallengeToken,
+                        mfa_verification_url = "/api/mfa/verify"
+                    });
+                }
+
+                // MFA not required - proceed with normal token generation
+                var roles = await _userManager.GetRolesAsync(user);
+
+                // Generate JWT token
+                var accessToken = _jwtTokenService.GenerateToken(user, roles);
+                var plainRefreshToken = _jwtTokenService.GenerateRefreshToken();
+
+                // Store refresh token in database (encrypted)
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                await _refreshTokenService.CreateRefreshTokenAsync(
                     user.Id,
                     user.TenantId,
-                    plainChallengeToken,
-                    HttpContext.Connection.RemoteIpAddress?.ToString(),
-                    HttpContext.Request.Headers["User-Agent"].ToString(),
-                    cancellationToken: cancellationToken);
+                    plainRefreshToken,
+                    ipAddress,
+                    userAgent,
+                    cancellationToken);
 
-                // Return MFA challenge response (not a standard OAuth response, but necessary for MFA flow)
-                return Unauthorized(new
+                var response = new OAuthTokenResponse
                 {
-                    error = "mfa_required",
-                    error_description = "Multi-factor authentication is required",
-                    mfa_challenge_token = plainChallengeToken,
-                    mfa_verification_url = "/api/mfa/verify"
-                });
+                    AccessToken = accessToken,
+                    TokenType = "Bearer",
+                    ExpiresIn = _jwtSettings.ExpirationMinutes * 60, // Convert minutes to seconds
+                    RefreshToken = plainRefreshToken,
+                    Scope = request.Scope
+                };
+
+                return Ok(response);
             }
 
-            // MFA not required - proceed with normal token generation
-            var roles = await _userManager.GetRolesAsync(user);
-
-            // Generate JWT token
-            var accessToken = _jwtTokenService.GenerateToken(user, roles);
-            var plainRefreshToken = _jwtTokenService.GenerateRefreshToken();
-
-            // Store refresh token in database (encrypted)
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
-
-            await _refreshTokenService.CreateRefreshTokenAsync(
-                user.Id,
-                user.TenantId,
-                plainRefreshToken,
-                ipAddress,
-                userAgent,
-                cancellationToken);
-
-            var response = new OAuthTokenResponse
+            // Unsupported grant type
+            return BadRequest(new
             {
-                AccessToken = accessToken,
-                TokenType = "Bearer",
-                ExpiresIn = _jwtSettings.ExpirationMinutes * 60, // Convert minutes to seconds
-                RefreshToken = plainRefreshToken,
-                Scope = request.Scope
-            };
-
-            return Ok(response);
+                error = "unsupported_grant_type",
+                error_description =
+                    $"Grant type '{grantType}' is not supported. Supported types: 'password', 'authorization_code', 'refresh_token'"
+            });
         }
-
-        // Unsupported grant type
-        return BadRequest(new
+        catch (Exception ex)
         {
-            error = "unsupported_grant_type",
-            error_description =
-                $"Grant type '{grantType}' is not supported. Supported types: 'password', 'authorization_code', 'refresh_token'"
-        });
+            // Try to extract request details for logging
+            string? grantType = null;
+            string? username = null;
+            
+            try
+            {
+                if (Request.HasFormContentType)
+                {
+                    grantType = Request.Form["grant_type"].ToString();
+                    username = Request.Form["username"].ToString();
+                }
+                else
+                {
+                    // For JSON requests, we can't easily re-read the body, so just log the exception
+                    grantType = "unknown";
+                    username = "unknown";
+                }
+            }
+            catch
+            {
+                // Ignore errors when trying to extract request details
+            }
+            
+            _logger.LogError(ex, "Error processing OAuth token request. GrantType: {GrantType}, Username: {Username}",
+                grantType ?? "unknown", username ?? "unknown");
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                error = "server_error",
+                error_description = "An internal server error occurred while processing the token request. Please try again later."
+            });
+        }
     }
 
     /// <summary>
@@ -562,10 +603,14 @@ public class OAuthController : ControllerBase
         }
         else if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
         {
-            // Authenticate user (tenantId is optional - will be resolved from email domain if not provided)
+            // Extract hostname from request for vanity URL resolution
+            var hostname = Request.Host.Value; // e.g., "tenant1.foo.org" or "tenant1.foo.org:8080"
+
+            // Authenticate user (tenantId is optional - will be resolved from email domain or vanity URL if not provided)
             var loginRequest = new LoginRequest
             {
                 TenantId = tenantId,
+                Host = hostname,
                 UserNameOrEmail = username,
                 Password = password,
                 RememberMe = false
@@ -574,12 +619,24 @@ public class OAuthController : ControllerBase
             var authResult = await _authenticationService.LoginAsync(loginRequest, cancellationToken);
             if (authResult.Succeeded && authResult.User != null)
                 user = await _userManager.FindByIdAsync(authResult.User.Id.ToString());
+            else
+            {
+                _logger.LogWarning("Login failed during OAuth authorization. Username: {Username}, TenantId: {TenantId}, ClientId: {ClientId}",
+                    username, tenantId, clientId);
+            }
         }
 
         if (user == null || !user.IsActive)
+        {
+            if (user != null && !user.IsActive)
+            {
+                _logger.LogWarning("Login failed during OAuth authorization: User account is inactive. UserId: {UserId}, ClientId: {ClientId}",
+                    user.Id, clientId);
+            }
             // Show login page again with error
             return ShowConsentPage(client, redirectUri, scope, state, codeChallenge, codeChallengeMethod,
                 "Invalid username, password, or tenant ID");
+        }
 
         // Check if user denied access
         if (action == "deny") return BuildErrorRedirect(redirectUri, "access_denied", "User denied access", state);

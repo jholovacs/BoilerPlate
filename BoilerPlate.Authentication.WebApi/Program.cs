@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using BoilerPlate.Authentication.Database.PostgreSql.Extensions;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -9,6 +10,7 @@ using BoilerPlate.Authentication.WebApi.Services;
 using BoilerPlate.Observability.Abstractions;
 using BoilerPlate.Observability.OpenTelemetry.Extensions;
 using BoilerPlate.ServiceBus.RabbitMq.Extensions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
@@ -107,6 +109,70 @@ try
 
     // Add HttpContextAccessor for accessing HttpContext in services/middleware
     builder.Services.AddHttpContextAccessor();
+
+    // Configure Data Protection for persistent key storage
+    // In containerized environments, mount a volume to persist keys across container restarts
+    // Set DATA_PROTECTION_KEYS_PATH environment variable to specify a persistent volume path
+    var dataProtectionKeysPath = Environment.GetEnvironmentVariable("DATA_PROTECTION_KEYS_PATH");
+    var dataProtectionConfigured = false;
+
+    if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+    {
+        try
+        {
+            // Ensure the directory exists
+            Directory.CreateDirectory(dataProtectionKeysPath);
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+            Log.Information("Data Protection keys will be persisted to: {Path}", dataProtectionKeysPath);
+            dataProtectionConfigured = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Data Protection with custom path {Path}, trying default location", dataProtectionKeysPath);
+        }
+    }
+
+    // If custom path wasn't set or failed, try container-friendly path
+    if (!dataProtectionConfigured)
+    {
+        var persistentPath = "/app/data-protection-keys";
+        try
+        {
+            if (Directory.Exists("/app"))
+            {
+                Directory.CreateDirectory(persistentPath);
+                builder.Services.AddDataProtection()
+                    .PersistKeysToFileSystem(new DirectoryInfo(persistentPath));
+                Log.Information("Data Protection keys will be persisted to: {Path}", persistentPath);
+                dataProtectionConfigured = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Data Protection with container path {Path}, trying Windows path", persistentPath);
+        }
+    }
+
+    // If container path failed, try Windows ApplicationData path
+    if (!dataProtectionConfigured)
+    {
+        try
+        {
+            var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                "BoilerPlate", "DataProtection-Keys");
+            Directory.CreateDirectory(appDataPath);
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(appDataPath));
+            Log.Information("Data Protection keys will be persisted to: {Path}", appDataPath);
+            dataProtectionConfigured = true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to configure Data Protection with persistent path, keys may not persist across restarts: {Message}", ex.Message);
+            // Data Protection will use default location (ephemeral) - this is acceptable for development
+        }
+    }
 
     // Register OpenTelemetry metrics recorder
     // During design-time, skip metrics registration to avoid issues

@@ -109,9 +109,9 @@ public class RefreshTokensODataController : ODataController
     ///     Service Administrators can revoke any token, Tenant Administrators and User Administrators only their tenant's
     ///     tokens
     /// </summary>
-    [Route("RefreshTokens({key})/Revoke")]
+    [Route("/api/odata/RefreshTokens({key})/Revoke")]
     [HttpPut]
-    public async Task<IActionResult> Revoke([FromODataUri] Guid key, CancellationToken cancellationToken)
+    public async Task<IActionResult> Revoke([FromRoute] Guid key, CancellationToken cancellationToken)
     {
         var user = User;
         var isServiceAdmin = user.IsInRole("Service Administrator");
@@ -187,7 +187,7 @@ public class RefreshTokensODataController : ODataController
     /// <response code="200">Query results</response>
     /// <response code="400">Invalid query string</response>
     /// <response code="401">Unauthorized</response>
-    [Route("RefreshTokens/$query")]
+    [Route("/api/odata/RefreshTokens/query")]
     [HttpPost]
     [Consumes("text/plain", "application/json")]
     public async Task<IActionResult> PostQuery()

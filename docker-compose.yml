@@ -155,6 +155,20 @@ services:
       retries: 3
       start_period: 40s
 
+  frontend:
+    image: boilerplate-frontend:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: BoilerPlate.Frontend/Dockerfile
+    container_name: boilerplate-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      webapi:
+        condition: service_started
+
 volumes:
   postgres_data:
   rabbitmq_data:
