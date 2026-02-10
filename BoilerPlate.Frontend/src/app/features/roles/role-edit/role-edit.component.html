@@ -4,7 +4,12 @@
       <a [routerLink]="rolesListUrl()" class="back-link">← Back to Roles</a>
       <h1>{{ isCreateMode ? 'Create role' : (role?.name ?? 'Role') }}</h1>
     </div>
-    <button type="button" class="btn btn-secondary" (click)="authService.logout()">Logout</button>
+    <div class="header-actions">
+      <ng-container *ngIf="!isCreateMode && role && !role.isSystemRole">
+        <button type="button" class="btn btn-danger" (click)="deleteRole()">Delete role</button>
+      </ng-container>
+      <button type="button" class="btn btn-secondary" (click)="authService.logout()">Logout</button>
+    </div>
   </div>
 
   <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
@@ -12,17 +17,16 @@
 
   <div *ngIf="!isLoading && (isCreateMode || role)" class="card">
     <p *ngIf="role?.isSystemRole" class="hint">System roles cannot be modified or deleted.</p>
-    <form *ngIf="isCreateMode || !role?.isSystemRole" (ngSubmit)="save()">
+    <form *ngIf="isCreateMode || !role?.isSystemRole" (ngSubmit)="save()" [attr.autocomplete]="isCreateMode ? 'off' : null">
       <div class="form-group">
         <label for="name">Name *</label>
-        <input type="text" id="name" [(ngModel)]="form.name" name="name" required />
+        <input type="text" id="name" [(ngModel)]="form.name" name="name" required [attr.autocomplete]="isCreateMode ? 'off' : null" />
       </div>
       <div class="form-group">
         <label for="description">Description</label>
-        <textarea id="description" [(ngModel)]="form.description" name="description" rows="3"></textarea>
+        <textarea id="description" [(ngModel)]="form.description" name="description" rows="3" [attr.autocomplete]="isCreateMode ? 'off' : null"></textarea>
       </div>
       <div *ngIf="saveError" class="error-message">{{ saveError }}</div>
-      <div *ngIf="saveSuccess" class="success-message">{{ saveSuccess }}</div>
       <div class="form-actions">
         <button type="submit" class="btn btn-primary" [disabled]="isSaving">
           {{ isSaving ? 'Saving...' : (isCreateMode ? 'Create role' : 'Save') }}
@@ -37,13 +41,5 @@
         <button type="button" class="btn btn-secondary" (click)="goBack()">Back to Roles</button>
       </div>
     </div>
-
-    <ng-container *ngIf="!isCreateMode && role && !role.isSystemRole">
-      <hr class="section-divider" />
-      <h2>Actions</h2>
-      <div class="form-actions">
-        <button type="button" class="btn btn-danger" (click)="deleteRole()">Delete role</button>
-      </div>
-    </ng-container>
   </div>
 </div>

@@ -153,10 +153,21 @@ public class RoleService : IRoleService
 
         if (role == null) return Enumerable.Empty<UserDto>();
 
-        var users = await _userManager.GetUsersInRoleAsync(roleName);
-        var userDtos = new List<UserDto>();
+        // Resolve users by role Id (tenant-scoped), not by role name. GetUsersInRoleAsync(roleName)
+        // would look up the role by name only and can return multiple roles across tenants.
+        var userIdsInRole = await _context.Set<IdentityUserRole<Guid>>()
+            .Where(ur => ur.RoleId == role.Id)
+            .Select(ur => ur.UserId)
+            .ToListAsync(cancellationToken);
 
-        foreach (var user in users.Where(u => u.TenantId == tenantId))
+        if (userIdsInRole.Count == 0) return Enumerable.Empty<UserDto>();
+
+        var users = await _context.Users
+            .Where(u => userIdsInRole.Contains(u.Id))
+            .ToListAsync(cancellationToken);
+
+        var userDtos = new List<UserDto>();
+        foreach (var user in users)
         {
             var roles = await _userManager.GetRolesAsync(user);
             userDtos.Add(new UserDto

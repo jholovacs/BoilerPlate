@@ -174,7 +174,7 @@ export class UserEditComponent implements OnInit {
     if (!this.userId) return;
     this.isSaving = true;
     this.saveError = '';
-    this.saveSuccess = '';
+    this.rolesError = '';
     const req: UpdateUserRequest = {
       firstName: this.form.firstName || undefined,
       lastName: this.form.lastName || undefined,
@@ -183,17 +183,57 @@ export class UserEditComponent implements OnInit {
       isActive: this.form.isActive
     };
     this.userService.update(this.userId, req).subscribe({
-      next: () => {
-        this.isSaving = false;
-        this.saveSuccess = 'User updated';
-        this.loadUser();
-        setTimeout(() => (this.saveSuccess = ''), 3000);
-      },
+      next: () => this.applyRoleChangesAndRedirect(),
       error: (err) => {
         this.isSaving = false;
         this.saveError = err.error?.error || 'Failed to update user';
       }
     });
+  }
+
+  /** Applies any role assignment changes then redirects to the users list. */
+  private applyRoleChangesAndRedirect(): void {
+    if (!this.userId) {
+      this.isSaving = false;
+      this.router.navigate(this.usersListUrl());
+      return;
+    }
+    const assignableNames = new Set(this.assignableRoles.map((r) => r.name));
+    const toAdd = this.selectedRoleNames.filter((r) => !this.userRoleNames.includes(r) && assignableNames.has(r));
+    const toRemove = this.userRoleNames.filter((r) => !this.selectedRoleNames.includes(r));
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      this.isSaving = false;
+      this.router.navigate(this.usersListUrl());
+      return;
+    }
+    let pending = 0;
+    if (toAdd.length) pending++;
+    if (toRemove.length) pending++;
+    const check = () => {
+      pending--;
+      if (pending === 0) {
+        this.isSaving = false;
+        this.router.navigate(this.usersListUrl());
+      }
+    };
+    if (toAdd.length) {
+      this.userService.assignRoles(this.userId, toAdd).subscribe({
+        next: check,
+        error: (err) => {
+          this.isSaving = false;
+          this.saveError = err.error?.error || 'Failed to assign roles';
+        }
+      });
+    }
+    if (toRemove.length) {
+      this.userService.removeRoles(this.userId, toRemove).subscribe({
+        next: check,
+        error: (err) => {
+          this.isSaving = false;
+          this.saveError = err.error?.error || 'Failed to remove roles';
+        }
+      });
+    }
   }
 
   createUser(): void {
@@ -213,9 +253,9 @@ export class UserEditComponent implements OnInit {
       email: this.createForm.email.trim(),
       userName: this.createForm.userName.trim(),
       password: this.createForm.password,
-      firstName: this.createForm.firstName?.trim() || undefined,
-      lastName: this.createForm.lastName?.trim() || undefined,
-      phoneNumber: this.createForm.phoneNumber?.trim() || undefined
+      firstName: this.form.firstName?.trim() || undefined,
+      lastName: this.form.lastName?.trim() || undefined,
+      phoneNumber: this.form.phoneNumber?.trim() || undefined
     };
     if (this.isServiceAdmin && this.createForm.tenantId) req.tenantId = this.createForm.tenantId;
     this.userService.create(req).subscribe({
@@ -228,32 +268,6 @@ export class UserEditComponent implements OnInit {
         this.saveError = err.error?.error || err.error?.errors?.join?.(' ') || 'Failed to create user';
       }
     });
-  }
-
-  saveRoles(): void {
-    if (!this.userId) return;
-    this.rolesError = '';
-    const assignableNames = new Set(this.assignableRoles.map(r => r.name));
-    const toAdd = this.selectedRoleNames.filter(r => !this.userRoleNames.includes(r) && assignableNames.has(r));
-    const toRemove = this.userRoleNames.filter(r => !this.selectedRoleNames.includes(r));
-    const done = () => {
-      this.loadUser();
-    };
-    let pending = 0;
-    if (toAdd.length) pending++;
-    if (toRemove.length) pending++;
-    if (pending === 0) {
-      done();
-      return;
-    }
-    const check = () => {
-      pending--;
-      if (pending === 0) done();
-    };
-    if (toAdd.length)
-      this.userService.assignRoles(this.userId, toAdd).subscribe({ next: check, error: () => (this.rolesError = 'Failed to assign roles') });
-    if (toRemove.length)
-      this.userService.removeRoles(this.userId, toRemove).subscribe({ next: check, error: () => (this.rolesError = 'Failed to remove roles') });
   }
 
   toggleRole(roleName: string): void {

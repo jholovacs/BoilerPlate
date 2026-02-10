@@ -1,6 +1,8 @@
+using System.Linq;
 using BoilerPlate.Authentication.Database.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace BoilerPlate.Authentication.Database.PostgreSql;
 
@@ -52,6 +54,10 @@ public class AuthenticationDbContext : BaseAuthDbContext
         // Configure ApplicationUser for PostgreSQL
         builder.Entity<ApplicationUser>(entity =>
         {
+            // Remove Identity default indexes that are unique on name/normalized name only (no tenant id)
+            RemoveIndexIfPresent(entity.Metadata, index => index.Properties.Count == 1 && index.Properties[0].Name == "NormalizedEmail");
+            RemoveIndexIfPresent(entity.Metadata, index => index.Properties.Count == 1 && index.Properties[0].Name == "NormalizedUserName");
+
             // PostgreSQL uses different syntax for filtered indexes
             // Note: Column names in filters must use snake_case since UseSnakeCaseNamingConvention
             // automatically converts column names (Email -> email, UserName -> user_name, TenantId -> tenant_id)
@@ -64,15 +70,16 @@ public class AuthenticationDbContext : BaseAuthDbContext
                 .IsUnique()
                 .HasFilter("\"user_name\" IS NOT NULL");
 
-            // Override Identity default index names to use snake_case
-            // Identity framework creates these indexes with PascalCase names (EmailIndex, UserNameIndex)
-            // We need to explicitly rename them to snake_case
-            entity.HasIndex(e => e.NormalizedEmail)
-                .HasDatabaseName("ix_email_index");
-
-            entity.HasIndex(e => e.NormalizedUserName)
+            // Unique indexes per tenant for normalized lookups (Identity uses these for FindByEmail/FindByName)
+            entity.HasIndex(e => new { e.TenantId, e.NormalizedEmail })
                 .IsUnique()
-                .HasDatabaseName("ix_user_name_index");
+                .HasDatabaseName("ix_asp_net_users_tenant_id_normalized_email")
+                .HasFilter("\"normalized_email\" IS NOT NULL");
+
+            entity.HasIndex(e => new { e.TenantId, e.NormalizedUserName })
+                .IsUnique()
+                .HasDatabaseName("ix_asp_net_users_tenant_id_normalized_user_name")
+                .HasFilter("\"normalized_user_name\" IS NOT NULL");
 
             // Configure column types for PostgreSQL
             entity.Property(e => e.CreatedAt)
@@ -85,15 +92,18 @@ public class AuthenticationDbContext : BaseAuthDbContext
         // Configure ApplicationRole for PostgreSQL
         builder.Entity<ApplicationRole>(entity =>
         {
-            // Override Identity default index name to use snake_case
-            // Identity framework creates RoleNameIndex with PascalCase name
-            entity.HasIndex(e => e.NormalizedName)
-                .IsUnique()
-                .HasDatabaseName("ix_role_name_index");
+            // Remove Identity default index that is unique on NormalizedName only (no tenant id)
+            RemoveIndexIfPresent(entity.Metadata, index => index.Properties.Count == 1 && index.Properties[0].Name == "NormalizedName");
 
-            // Unique role name per tenant
+            // Unique role name per tenant (normalized name for lookups)
+            entity.HasIndex(e => new { e.TenantId, e.NormalizedName })
+                .IsUnique()
+                .HasDatabaseName("ix_asp_net_roles_tenant_id_normalized_name");
+
+            // Unique role name per tenant (display name)
             entity.HasIndex(e => new { e.TenantId, e.Name })
-                .IsUnique();
+                .IsUnique()
+                .HasDatabaseName("ix_asp_net_roles_tenant_id_name");
         });
 
         // Configure TenantSetting for PostgreSQL
@@ -109,5 +119,17 @@ public class AuthenticationDbContext : BaseAuthDbContext
 
         // Explicit table name for password history (snake_case)
         builder.Entity<UserPasswordHistory>().ToTable("user_password_history");
+    }
+
+    /// <summary>
+    ///     Removes an index from the entity type if it exists (e.g. Identity default indexes that don't include TenantId).
+    /// </summary>
+    private static void RemoveIndexIfPresent(IMutableEntityType entityType, Func<IMutableIndex, bool> predicate)
+    {
+        var index = entityType.GetIndexes().FirstOrDefault(predicate);
+        if (index != null)
+        {
+            entityType.RemoveIndex(index);
+        }
     }
 }

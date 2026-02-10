@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -120,6 +121,9 @@ public static class ServiceCollectionExtensions
             })
             .AddEntityFrameworkStores<AuthenticationDbContext>()
             .AddDefaultTokenProviders();
+
+        // Use tenant-scoped role lookups so "Tenant Administrator" etc. resolve per tenant (avoids "Sequence contains more than one element")
+        services.AddScoped<IUserStore<ApplicationUser>, MultiTenantUserStore>();
 
         return services;
     }

@@ -26,9 +26,7 @@ export interface Tenant {
           <h1>Tenant Management</h1>
           <nav class="nav-links">
             <a routerLink="/account" class="nav-link">Account</a>
-            <a routerLink="/users" class="nav-link">Users</a>
             <a routerLink="/account/change-password" class="nav-link">Change password</a>
-            <a routerLink="/my-tenant/settings" class="nav-link">My tenant settings</a>
             <a routerLink="/tenants" class="nav-link active">Tenants</a>
           </nav>
         </div>
@@ -76,7 +74,7 @@ export interface Tenant {
               <td>{{ formatDate(tenant.createdAt) }}</td>
               <td>
                 <a [routerLink]="['/tenants', tenant.id, 'edit']" class="btn btn-secondary">Edit</a>
-                <button class="btn btn-danger" (click)="deleteTenant(tenant)">Delete</button>
+                <button *ngIf="!isSystemTenant(tenant)" class="btn btn-danger" (click)="deleteTenant(tenant)">Delete</button>
               </td>
             </tr>
           </tbody>
@@ -339,6 +337,12 @@ export class TenantManagementComponent implements OnInit {
 
   formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString();
+  }
+
+  /** System tenant is immutable and cannot be deleted. */
+  isSystemTenant(tenant: Tenant): boolean {
+    const n = tenant.name?.trim().toLowerCase();
+    return n === 'system' || n === 'system tenant';
   }
 
   logout(): void {

@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -160,10 +161,14 @@ public class TenantsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<TenantDto>> UpdateTenant(Guid id, [FromBody] UpdateTenantRequest request,
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var forbid = await ForbidIfSystemTenantAsync(id, cancellationToken);
+        if (forbid != null) return forbid;
 
         var tenant = await _tenantService.UpdateTenantAsync(id, request, cancellationToken);
 
@@ -189,10 +194,14 @@ public class TenantsController : ControllerBase
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> DeleteTenant(Guid id, CancellationToken cancellationToken)
     {
+        var forbid = await ForbidIfSystemTenantAsync(id, cancellationToken);
+        if (forbid != null) return forbid;
+
         var result = await _tenantService.DeleteTenantAsync(id, cancellationToken);
 
         if (!result)
@@ -225,10 +234,14 @@ public class TenantsController : ControllerBase
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpDelete("{id}/offboard")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> OffboardTenant(Guid id, CancellationToken cancellationToken)
     {
+        var forbid = await ForbidIfSystemTenantAsync(id, cancellationToken);
+        if (forbid != null) return forbid;
+
         var result = await _tenantService.OffboardTenantAsync(id, cancellationToken);
 
         if (!result)
@@ -243,5 +256,47 @@ public class TenantsController : ControllerBase
         _logger.LogInformation("Tenant offboarded: {TenantId}", id);
 
         return NoContent();
+    }
+
+    /// <summary>
+    ///     Ensures all predefined default roles exist for the tenant (idempotent). Use to repair tenants created without roles.
+    /// </summary>
+    /// <param name="id">Tenant ID (UUID)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Ok if roles ensured, NotFound if tenant not found, BadRequest if creation failed</returns>
+    /// <response code="200">Default roles ensured for tenant</response>
+    /// <response code="400">Failed to create missing roles</response>
+    /// <response code="404">Tenant not found</response>
+    /// <response code="401">Unauthorized - Service Administrator role required</response>
+    [HttpPost("{id}/ensure-default-roles")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> EnsureDefaultRoles(Guid id, CancellationToken cancellationToken)
+    {
+        var tenant = await _tenantService.GetTenantByIdAsync(id, cancellationToken);
+        if (tenant == null) return NotFound(new { error = "Tenant not found", tenantId = id });
+
+        var result = await _tenantService.EnsureDefaultRolesForTenantAsync(id, cancellationToken);
+        if (!result)
+            return BadRequest(new
+                { error = "Failed to ensure default roles for tenant. Check logs for details.", tenantId = id });
+
+        _logger.LogInformation("Default roles ensured for tenant {TenantId} - {TenantName}", id, tenant.Name);
+        return Ok(new { message = "Default roles ensured for tenant", tenantId = id });
+    }
+
+    /// <summary>
+    ///     Returns 403 Forbidden if the tenant is the immutable System tenant; otherwise null.
+    /// </summary>
+    private async Task<ActionResult?> ForbidIfSystemTenantAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tenant = await _tenantService.GetTenantByIdAsync(id, cancellationToken);
+        if (tenant == null) return null;
+        if (PredefinedRoleNames.IsSystemTenant(tenant.Name))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "The System tenant is immutable and cannot be modified or deleted." });
+        return null;
     }
 }

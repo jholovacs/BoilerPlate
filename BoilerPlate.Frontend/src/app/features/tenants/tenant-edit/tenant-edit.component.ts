@@ -153,6 +153,12 @@ export class TenantEditComponent implements OnInit {
     if (tab === 'saml2') this.loadSaml2Settings();
   }
 
+  /** System tenant is immutable and cannot be modified. */
+  isSystemTenant(): boolean {
+    const n = this.tenant?.name?.trim().toLowerCase();
+    return n === 'system' || n === 'system tenant';
+  }
+
   loadTenant(): void {
     if (!this.tenantId) return;
     this.isLoading = true;

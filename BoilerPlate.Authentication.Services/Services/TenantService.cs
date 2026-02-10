@@ -80,7 +80,13 @@ public class TenantService : ITenantService
                 _context.Tenants.Add(tenant);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                await CreateDefaultRolesForTenantAsync(tenant.Id, tenant.Name, cancellationToken);
+                var createdRoles = await CreateDefaultRolesForTenantAsync(tenant.Id, tenant.Name, cancellationToken);
+                if (createdRoles == null)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    _logger?.LogError("Tenant creation aborted: default roles could not be created for {TenantId}", tenant.Id);
+                    return null;
+                }
 
                 await transaction.CommitAsync(cancellationToken);
                 return MapToTenantDto(tenant);
@@ -101,6 +107,7 @@ public class TenantService : ITenantService
     {
         var tenant = await _context.Tenants.FindAsync(new object[] { tenantId }, cancellationToken);
         if (tenant == null) return null;
+        if (PredefinedRoleNames.IsSystemTenant(tenant.Name)) return null;
 
         if (request.Name != null)
         {
@@ -129,6 +136,7 @@ public class TenantService : ITenantService
     {
         var tenant = await _context.Tenants.FindAsync(new object[] { tenantId }, cancellationToken);
         if (tenant == null) return false;
+        if (PredefinedRoleNames.IsSystemTenant(tenant.Name)) return false;
 
         // Check if tenant has users or roles
         var hasUsers = await _context.Users.AnyAsync(u => u.TenantId == tenantId, cancellationToken);
@@ -248,6 +256,7 @@ public class TenantService : ITenantService
     {
         var tenant = await _context.Tenants.FindAsync(new object[] { tenantId }, cancellationToken);
         if (tenant == null) return false;
+        if (PredefinedRoleNames.IsSystemTenant(tenant.Name)) return false;
 
         // Capture tenant info before deletion for event
         var tenantName = tenant.Name;
@@ -390,14 +399,60 @@ public class TenantService : ITenantService
         });
     }
 
+    /// <inheritdoc />
+    public async Task<bool> EnsureDefaultRolesForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        var tenant = await _context.Tenants.FindAsync(new object[] { tenantId }, cancellationToken);
+        if (tenant == null) return false;
+
+        var existingNames = await _context.Set<ApplicationRole>()
+            .Where(r => r.TenantId == tenantId)
+            .Select(r => r.Name)
+            .ToListAsync(cancellationToken);
+
+        var definitions = GetDefaultRoleDefinitions(tenant.Name).ToList();
+        var added = false;
+        foreach (var (name, description) in definitions)
+        {
+            if (existingNames.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+
+            var role = new ApplicationRole
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Name = name,
+                NormalizedName = _roleManager.NormalizeKey(name),
+                Description = description,
+                CreatedAt = DateTime.UtcNow,
+                ConcurrencyStamp = Guid.NewGuid().ToString()
+            };
+            _context.Set<ApplicationRole>().Add(role);
+            added = true;
+        }
+
+        if (!added) return true;
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger?.LogInformation("Ensured default roles for tenant {TenantId} ({TenantName})", tenantId, tenant.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to ensure default roles for tenant {TenantId}", tenantId);
+            return false;
+        }
+    }
+
     /// <summary>
     ///     Creates the predefined default roles for a tenant. System tenant (name "System" or "System Tenant") gets all 4 roles including Service Administrator; others get 3 roles.
+    ///     Uses the DbContext directly so uniqueness is enforced per (TenantId, NormalizedName) and the default RoleValidator (global name uniqueness) does not reject same role names in different tenants.
     ///     Returns the list of created role names, or null if any role creation failed.
     /// </summary>
     private async Task<List<string>?> CreateDefaultRolesForTenantAsync(Guid tenantId, string tenantName,
         CancellationToken cancellationToken)
     {
-        var definitions = GetDefaultRoleDefinitions(tenantName);
+        var definitions = GetDefaultRoleDefinitions(tenantName).ToList();
         var created = new List<string>();
 
         foreach (var (name, description) in definitions)
@@ -409,21 +464,25 @@ public class TenantService : ITenantService
                 Name = name,
                 NormalizedName = _roleManager.NormalizeKey(name),
                 Description = description,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ConcurrencyStamp = Guid.NewGuid().ToString()
             };
 
-            var result = await _roleManager.CreateAsync(role);
-            if (!result.Succeeded)
-            {
-                _logger?.LogError("Failed to create role {RoleName} for tenant {TenantId}. Errors: {Errors}",
-                    name, tenantId, string.Join(", ", result.Errors.Select(e => e.Description)));
-                return null;
-            }
-
+            _context.Set<ApplicationRole>().Add(role);
             created.Add(name);
         }
 
-        return created;
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            return created;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to create default roles for tenant {TenantId}. Roles: {Roles}",
+                tenantId, string.Join(", ", created));
+            return null;
+        }
     }
 
     private static IEnumerable<(string Name, string Description)> GetDefaultRoleDefinitions(string tenantName)

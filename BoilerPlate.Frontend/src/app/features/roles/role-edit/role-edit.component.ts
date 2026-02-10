@@ -21,7 +21,6 @@ export class RoleEditComponent implements OnInit {
   isSaving = false;
   errorMessage = '';
   saveError = '';
-  saveSuccess = '';
 
   form = { name: '', description: '' };
 
@@ -85,7 +84,6 @@ export class RoleEditComponent implements OnInit {
     }
     this.isSaving = true;
     this.saveError = '';
-    this.saveSuccess = '';
 
     if (this.isCreateMode) {
       this.roleService.create(this.tenantId, { name, description: this.form.description?.trim() || undefined }).subscribe({
@@ -102,9 +100,7 @@ export class RoleEditComponent implements OnInit {
       this.roleService.update(this.tenantId, this.roleId, { name, description: this.form.description?.trim() || undefined }).subscribe({
         next: () => {
           this.isSaving = false;
-          this.saveSuccess = 'Role updated.';
-          this.loadRole();
-          setTimeout(() => (this.saveSuccess = ''), 3000);
+          this.router.navigate(this.rolesListUrl());
         },
         error: (err) => {
           this.isSaving = false;

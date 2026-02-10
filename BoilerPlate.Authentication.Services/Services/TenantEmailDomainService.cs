@@ -81,9 +81,9 @@ public class TenantEmailDomainService : ITenantEmailDomainService
             possibleDomains.Add(parentDomain);
         }
 
-        // Find the first matching active domain mapping
+        // Find the first matching active domain mapping (Domain is stored normalized to lowercase)
         var domainMapping = await _context.TenantEmailDomains
-            .Where(d => possibleDomains.Contains(d.Domain.ToLowerInvariant()) && d.IsActive)
+            .Where(d => possibleDomains.Contains(d.Domain) && d.IsActive)
             .OrderByDescending(d => d.Domain.Length) // Prefer more specific domains (longer matches)
             .FirstOrDefaultAsync(cancellationToken);
 

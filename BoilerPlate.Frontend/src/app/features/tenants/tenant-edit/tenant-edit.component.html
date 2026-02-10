@@ -17,6 +17,7 @@
   <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
 
   <ng-container *ngIf="!isLoading && tenant">
+    <p *ngIf="isSystemTenant()" class="hint system-tenant-banner">The System tenant is immutable and cannot be modified.</p>
     <div class="tabs">
       <button
         *ngFor="let tab of tabs"
@@ -36,21 +37,21 @@
         <form (ngSubmit)="saveGeneral()">
           <div class="form-group">
             <label for="name">Name *</label>
-            <input type="text" id="name" [(ngModel)]="generalForm.name" name="name" required />
+            <input type="text" id="name" [(ngModel)]="generalForm.name" name="name" required [readonly]="isSystemTenant()" />
           </div>
           <div class="form-group">
             <label for="description">Description</label>
-            <textarea id="description" [(ngModel)]="generalForm.description" name="description"></textarea>
+            <textarea id="description" [(ngModel)]="generalForm.description" name="description" [readonly]="isSystemTenant()"></textarea>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" [(ngModel)]="generalForm.isActive" name="isActive" />
+              <input type="checkbox" [(ngModel)]="generalForm.isActive" name="isActive" [disabled]="isSystemTenant()" />
               Active
             </label>
           </div>
           <div *ngIf="generalError" class="error-message">{{ generalError }}</div>
           <div *ngIf="generalSuccess" class="success-message">{{ generalSuccess }}</div>
-          <div class="form-actions">
+          <div class="form-actions" *ngIf="!isSystemTenant()">
             <button type="submit" class="btn btn-primary" [disabled]="isSavingGeneral">
               {{ isSavingGeneral ? 'Saving...' : 'Save' }}
             </button>

@@ -63,4 +63,12 @@ public interface ITenantService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if successful, false otherwise</returns>
     Task<bool> OffboardTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Ensures all predefined default roles exist for the tenant (idempotent). Use to repair tenants created without roles.
+    /// </summary>
+    /// <param name="tenantId">Tenant ID (UUID)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if all default roles now exist, false if tenant not found or role creation failed</returns>
+    Task<bool> EnsureDefaultRolesForTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
 }

@@ -7,19 +7,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class ReplaceUserAndRoleIndexesWithTenantScoped : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Drop old PascalCase indexes if they exist (from previous migrations)
-            // These may exist if the database was created before snake_case naming was implemented
-            migrationBuilder.Sql(@"
-                DROP INDEX IF EXISTS ""RoleNameIndex"";
-                DROP INDEX IF EXISTS ""EmailIndex"";
-                DROP INDEX IF EXISTS ""UserNameIndex"";
-            ");
-
             migrationBuilder.CreateTable(
                 name: "tenant",
                 columns: table => new
@@ -125,6 +117,29 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "tenant_email_domain",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    domain = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tenant_email_domain", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tenant_email_domain_tenant_tenant_id",
+                        column: x => x.tenant_id,
+                        principalTable: "tenant",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "tenant_setting",
                 columns: table => new
                 {
@@ -140,6 +155,29 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                     table.PrimaryKey("pk_tenant_setting", x => x.id);
                     table.ForeignKey(
                         name: "fk_tenant_setting_tenant_tenant_id",
+                        column: x => x.tenant_id,
+                        principalTable: "tenant",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tenant_vanity_url",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    hostname = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tenant_vanity_url", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tenant_vanity_url_tenant_tenant_id",
                         column: x => x.tenant_id,
                         principalTable: "tenant",
                         principalColumn: "id",
@@ -199,6 +237,39 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "fk_authorization_code_tenant_tenant_id",
+                        column: x => x.tenant_id,
+                        principalTable: "tenant",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "mfa_challenge_token",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    encrypted_token = table.Column<string>(type: "text", nullable: false),
+                    token_hash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    is_used = table.Column<bool>(type: "boolean", nullable: false),
+                    used_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    issued_from_ip_address = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: true),
+                    issued_from_user_agent = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_mfa_challenge_token", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_mfa_challenge_token_application_user_user_id",
+                        column: x => x.user_id,
+                        principalTable: "asp_net_users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_mfa_challenge_token_tenant_tenant_id",
                         column: x => x.tenant_id,
                         principalTable: "tenant",
                         principalColumn: "id",
@@ -312,6 +383,35 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "user_password_history",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    password_hash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    password_salt = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    set_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    changed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_user_password_history", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_user_password_history_application_user_user_id",
+                        column: x => x.user_id,
+                        principalTable: "asp_net_users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_user_password_history_tenant_tenant_id",
+                        column: x => x.tenant_id,
+                        principalTable: "tenant",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "user_roles",
                 columns: table => new
                 {
@@ -362,9 +462,9 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_role_name_index",
+                name: "ix_asp_net_roles_tenant_id_normalized_name",
                 table: "asp_net_roles",
-                column: "normalized_name",
+                columns: new[] { "tenant_id", "normalized_name" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -375,22 +475,25 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 filter: "\"email\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "ix_asp_net_users_tenant_id_normalized_email",
+                table: "asp_net_users",
+                columns: new[] { "tenant_id", "normalized_email" },
+                unique: true,
+                filter: "\"normalized_email\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_asp_net_users_tenant_id_normalized_user_name",
+                table: "asp_net_users",
+                columns: new[] { "tenant_id", "normalized_user_name" },
+                unique: true,
+                filter: "\"normalized_user_name\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_asp_net_users_tenant_id_user_name",
                 table: "asp_net_users",
                 columns: new[] { "tenant_id", "user_name" },
                 unique: true,
                 filter: "\"user_name\" IS NOT NULL");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_email_index",
-                table: "asp_net_users",
-                column: "normalized_email");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_user_name_index",
-                table: "asp_net_users",
-                column: "normalized_user_name",
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_authorization_code_code",
@@ -411,6 +514,27 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_authorization_code_user_id_tenant_id",
                 table: "authorization_code",
+                columns: new[] { "user_id", "tenant_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_mfa_challenge_token_expires_at",
+                table: "mfa_challenge_token",
+                column: "expires_at");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_mfa_challenge_token_tenant_id",
+                table: "mfa_challenge_token",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_mfa_challenge_token_token_hash",
+                table: "mfa_challenge_token",
+                column: "token_hash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_mfa_challenge_token_user_id_tenant_id",
+                table: "mfa_challenge_token",
                 columns: new[] { "user_id", "tenant_id" });
 
             migrationBuilder.CreateIndex(
@@ -457,10 +581,42 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_tenant_email_domain_domain",
+                table: "tenant_email_domain",
+                column: "domain",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenant_email_domain_tenant_id",
+                table: "tenant_email_domain",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenant_email_domain_tenant_id_is_active",
+                table: "tenant_email_domain",
+                columns: new[] { "tenant_id", "is_active" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_tenant_setting_tenant_id_key",
                 table: "tenant_setting",
                 columns: new[] { "tenant_id", "key" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenant_vanity_url_hostname",
+                table: "tenant_vanity_url",
+                column: "hostname",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenant_vanity_url_tenant_id",
+                table: "tenant_vanity_url",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tenant_vanity_url_tenant_id_is_active",
+                table: "tenant_vanity_url",
+                columns: new[] { "tenant_id", "is_active" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_user_claims_user_id",
@@ -488,6 +644,21 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_user_password_history_tenant_id",
+                table: "user_password_history",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_user_password_history_user_id_tenant_id",
+                table: "user_password_history",
+                columns: new[] { "user_id", "tenant_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_user_password_history_user_id_tenant_id_changed_at",
+                table: "user_password_history",
+                columns: new[] { "user_id", "tenant_id", "changed_at" });
+
+            migrationBuilder.CreateIndex(
                 name: "ix_user_roles_role_id",
                 table: "user_roles",
                 column: "role_id");
@@ -500,6 +671,9 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 name: "authorization_code");
 
             migrationBuilder.DropTable(
+                name: "mfa_challenge_token");
+
+            migrationBuilder.DropTable(
                 name: "o_auth_client");
 
             migrationBuilder.DropTable(
@@ -509,7 +683,13 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                 name: "role_claims");
 
             migrationBuilder.DropTable(
+                name: "tenant_email_domain");
+
+            migrationBuilder.DropTable(
                 name: "tenant_setting");
+
+            migrationBuilder.DropTable(
+                name: "tenant_vanity_url");
 
             migrationBuilder.DropTable(
                 name: "user_claims");
@@ -519,6 +699,9 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
 
             migrationBuilder.DropTable(
                 name: "user_logins");
+
+            migrationBuilder.DropTable(
+                name: "user_password_history");
 
             migrationBuilder.DropTable(
                 name: "user_roles");

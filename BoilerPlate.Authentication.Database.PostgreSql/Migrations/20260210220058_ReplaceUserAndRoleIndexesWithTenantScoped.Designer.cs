@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
 {
     [DbContext(typeof(AuthenticationDbContext))]
-    [Migration("20260210161151_AddUserPasswordHistoryTable")]
-    partial class AddUserPasswordHistoryTable
+    [Migration("20260210220058_ReplaceUserAndRoleIndexesWithTenantScoped")]
+    partial class ReplaceUserAndRoleIndexesWithTenantScoped
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -66,13 +66,13 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                     b.HasKey("Id")
                         .HasName("pk_asp_net_roles");
 
-                    b.HasIndex("NormalizedName")
-                        .IsUnique()
-                        .HasDatabaseName("ix_role_name_index");
-
                     b.HasIndex("TenantId", "Name")
                         .IsUnique()
                         .HasDatabaseName("ix_asp_net_roles_tenant_id_name");
+
+                    b.HasIndex("TenantId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asp_net_roles_tenant_id_normalized_name");
 
                     b.ToTable("asp_net_roles", (string)null);
                 });
@@ -173,17 +173,20 @@ namespace BoilerPlate.Authentication.Database.PostgreSql.Migrations
                     b.HasKey("Id")
                         .HasName("pk_asp_net_users");
 
-                    b.HasIndex("NormalizedEmail")
-                        .HasDatabaseName("ix_email_index");
-
-                    b.HasIndex("NormalizedUserName")
-                        .IsUnique()
-                        .HasDatabaseName("ix_user_name_index");
-
                     b.HasIndex("TenantId", "Email")
                         .IsUnique()
                         .HasDatabaseName("ix_asp_net_users_tenant_id_email")
                         .HasFilter("\"email\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "NormalizedEmail")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asp_net_users_tenant_id_normalized_email")
+                        .HasFilter("\"normalized_email\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "NormalizedUserName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asp_net_users_tenant_id_normalized_user_name")
+                        .HasFilter("\"normalized_user_name\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "UserName")
                         .IsUnique()
