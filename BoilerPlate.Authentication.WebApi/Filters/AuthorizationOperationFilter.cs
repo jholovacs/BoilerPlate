@@ -56,7 +56,7 @@ public class AuthorizationOperationFilter : IOperationFilter
                     AuthorizationPolicies.UserManagement,
                     "Service Administrator, Tenant Administrator, or User Administrator"
                 },
-                { AuthorizationPolicies.RoleManagement, "Service Administrator or Tenant Administrator" },
+                { AuthorizationPolicies.RoleManagement, "Service Administrator, Tenant Administrator, or Role Administrator" },
                 { AuthorizationPolicies.ODataAccess, "Service Administrator or Tenant Administrator" },
                 { AuthorizationPolicies.OAuthClientManagement, "Service Administrator or Tenant Administrator" }
             };
@@ -92,8 +92,13 @@ public class AuthorizationOperationFilter : IOperationFilter
                         roles.Add("Tenant Administrator");
                         roles.Add("User Administrator");
                     }
-                    else if (policy == AuthorizationPolicies.RoleManagement ||
-                             policy == AuthorizationPolicies.ODataAccess ||
+                    else if (policy == AuthorizationPolicies.RoleManagement)
+                    {
+                        roles.Add("Service Administrator");
+                        roles.Add("Tenant Administrator");
+                        roles.Add("Role Administrator");
+                    }
+                    else if (policy == AuthorizationPolicies.ODataAccess ||
                              policy == AuthorizationPolicies.OAuthClientManagement)
                     {
                         roles.Add("Service Administrator");

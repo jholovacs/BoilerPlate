@@ -1,0 +1,59 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.nav-link {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+.nav-link.active {
+  font-weight: 600;
+}
+
+.intro {
+  margin: 0 0 20px 0;
+  color: #555;
+}
+
+.account-info {
+  margin-bottom: 24px;
+}
+
+.info-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.info-row .label {
+  font-weight: 500;
+  color: #555;
+  min-width: 100px;
+}
+
+.form-actions {
+  margin-top: 20px;
+}

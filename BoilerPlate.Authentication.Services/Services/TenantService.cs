@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using BoilerPlate.Authentication.Abstractions;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.Database;
@@ -56,25 +57,42 @@ public class TenantService : ITenantService
     public async Task<TenantDto?> CreateTenantAsync(CreateTenantRequest request,
         CancellationToken cancellationToken = default)
     {
-        // Check if tenant name already exists
         var existingTenant = await _context.Tenants
             .FirstOrDefaultAsync(t => t.Name == request.Name, cancellationToken);
 
         if (existingTenant != null) return null;
 
-        var tenant = new Tenant
+        var strategy = _context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            Id = Guid.NewGuid(),
-            Name = request.Name,
-            Description = request.Description,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var tenant = new Tenant
+                {
+                    Id = Guid.NewGuid(),
+                    Name = request.Name,
+                    Description = request.Description,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
 
-        _context.Tenants.Add(tenant);
-        await _context.SaveChangesAsync(cancellationToken);
+                _context.Tenants.Add(tenant);
+                await _context.SaveChangesAsync(cancellationToken);
 
-        return MapToTenantDto(tenant);
+                await CreateDefaultRolesForTenantAsync(tenant.Id, tenant.Name, cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+                return MapToTenantDto(tenant);
+            }
+            catch (Exception ex)
+            {
+                try { await transaction.RollbackAsync(cancellationToken); }
+                catch (Exception rollbackEx) { _logger?.LogError(rollbackEx, "Rollback failed"); }
+                _logger?.LogError(ex, "Failed to create tenant {Name}", request.Name);
+                throw;
+            }
+        });
     }
 
     /// <inheritdoc />
@@ -161,46 +179,11 @@ public class TenantService : ITenantService
                 // Save tenant but don't commit transaction yet
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // Create default roles for the tenant
-                var defaultRoles = new[]
+                var createdRoleNames = await CreateDefaultRolesForTenantAsync(tenant.Id, tenant.Name, cancellationToken);
+                if (createdRoleNames == null)
                 {
-                    new
-                    {
-                        Name = "Tenant Administrator",
-                        Description = "Full administrative access to tenant settings and configuration"
-                    },
-                    new
-                    {
-                        Name = "User Administrator",
-                        Description = "Administrative access to manage users within the tenant"
-                    }
-                };
-
-                var createdRoleNames = new List<string>();
-
-                foreach (var roleInfo in defaultRoles)
-                {
-                    var role = new ApplicationRole
-                    {
-                        Id = Guid.NewGuid(),
-                        TenantId = tenant.Id,
-                        Name = roleInfo.Name,
-                        NormalizedName = _roleManager.NormalizeKey(roleInfo.Name),
-                        Description = roleInfo.Description,
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    var result = await _roleManager.CreateAsync(role);
-                    if (!result.Succeeded)
-                    {
-                        // Rollback transaction if role creation fails
-                        await transaction.RollbackAsync(cancellationToken);
-                        _logger?.LogError("Failed to create role {RoleName} for tenant {TenantId}. Errors: {Errors}",
-                            roleInfo.Name, tenant.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
-                        return null;
-                    }
-
-                    createdRoleNames.Add(roleInfo.Name);
+                    await transaction.RollbackAsync(cancellationToken);
+                    return null;
                 }
 
                 // Map to DTO before committing
@@ -405,6 +388,54 @@ public class TenantService : ITenantService
                 throw;
             }
         });
+    }
+
+    /// <summary>
+    ///     Creates the predefined default roles for a tenant. System tenant (name "System" or "System Tenant") gets all 4 roles including Service Administrator; others get 3 roles.
+    ///     Returns the list of created role names, or null if any role creation failed.
+    /// </summary>
+    private async Task<List<string>?> CreateDefaultRolesForTenantAsync(Guid tenantId, string tenantName,
+        CancellationToken cancellationToken)
+    {
+        var definitions = GetDefaultRoleDefinitions(tenantName);
+        var created = new List<string>();
+
+        foreach (var (name, description) in definitions)
+        {
+            var role = new ApplicationRole
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Name = name,
+                NormalizedName = _roleManager.NormalizeKey(name),
+                Description = description,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await _roleManager.CreateAsync(role);
+            if (!result.Succeeded)
+            {
+                _logger?.LogError("Failed to create role {RoleName} for tenant {TenantId}. Errors: {Errors}",
+                    name, tenantId, string.Join(", ", result.Errors.Select(e => e.Description)));
+                return null;
+            }
+
+            created.Add(name);
+        }
+
+        return created;
+    }
+
+    private static IEnumerable<(string Name, string Description)> GetDefaultRoleDefinitions(string tenantName)
+    {
+        if (PredefinedRoleNames.IsSystemTenant(tenantName))
+        {
+            yield return (PredefinedRoleNames.ServiceAdministrator, "Full access to all resources across all tenants");
+        }
+
+        yield return (PredefinedRoleNames.TenantAdministrator, "Full access to resources within the tenant");
+        yield return (PredefinedRoleNames.UserAdministrator, "User management within the tenant");
+        yield return (PredefinedRoleNames.RoleAdministrator, "Create and manage custom roles within the tenant");
     }
 
     private static TenantDto MapToTenantDto(Tenant tenant)

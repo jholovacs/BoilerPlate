@@ -1,0 +1,108 @@
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <a [routerLink]="usersListUrl()" class="back-link">← Back to Users</a>
+      <h1>{{ isCreateMode ? 'Create user' : (user?.userName ?? 'User') }}</h1>
+    </div>
+    <button class="btn btn-secondary" (click)="logout()">Logout</button>
+  </div>
+
+  <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+  <div *ngIf="isLoading" class="loading">Loading...</div>
+
+  <div *ngIf="!isLoading && (isCreateMode || user)" class="card">
+    <form (ngSubmit)="saveUser()">
+      <div class="form-group">
+        <label for="firstName">First name</label>
+        <input type="text" id="firstName" [(ngModel)]="form.firstName" name="firstName" />
+      </div>
+      <div class="form-group">
+        <label for="lastName">Last name</label>
+        <input type="text" id="lastName" [(ngModel)]="form.lastName" name="lastName" />
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input
+          *ngIf="isCreateMode"
+          type="email"
+          id="email"
+          [(ngModel)]="createForm.email"
+          name="email"
+        />
+        <input
+          *ngIf="!isCreateMode"
+          type="email"
+          id="email"
+          [(ngModel)]="form.email"
+          name="email"
+          readonly
+        />
+      </div>
+      <div *ngIf="isCreateMode" class="form-group">
+        <label for="userName">Username *</label>
+        <input type="text" id="userName" [(ngModel)]="createForm.userName" name="userName" required />
+      </div>
+      <div *ngIf="isCreateMode" class="form-group">
+        <label for="password">Password *</label>
+        <input type="password" id="password" [(ngModel)]="createForm.password" name="password" required />
+      </div>
+      <div *ngIf="isCreateMode" class="form-group">
+        <label for="confirmPassword">Confirm password *</label>
+        <input type="password" id="confirmPassword" [(ngModel)]="createForm.confirmPassword" name="confirmPassword" required />
+      </div>
+      <div *ngIf="isCreateMode && isServiceAdmin && tenants.length" class="form-group">
+        <label for="tenantId">Tenant</label>
+        <select id="tenantId" [(ngModel)]="createForm.tenantId" name="tenantId">
+          <option [ngValue]="undefined">— Select tenant —</option>
+          <option *ngFor="let t of tenants" [ngValue]="t.id">{{ t.name }}</option>
+        </select>
+      </div>
+      <div *ngIf="!isCreateMode" class="form-group">
+        <label>
+          <input type="checkbox" [(ngModel)]="form.isActive" name="isActive" />
+          Active
+        </label>
+      </div>
+      <div class="form-group">
+        <label for="phoneNumber">Phone</label>
+        <input type="text" id="phoneNumber" [(ngModel)]="form.phoneNumber" name="phoneNumber" />
+      </div>
+      <div *ngIf="saveError" class="error-message">{{ saveError }}</div>
+      <div *ngIf="saveSuccess" class="success-message">{{ saveSuccess }}</div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="isSaving">
+          {{ isSaving ? 'Saving...' : (isCreateMode ? 'Create user' : 'Save') }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="goBack()">Cancel</button>
+      </div>
+    </form>
+
+    <ng-container *ngIf="!isCreateMode && user">
+      <hr class="section-divider" />
+      <h2>Roles</h2>
+      <p class="hint">Assign or remove roles for this user. Only roles you are allowed to assign are shown.</p>
+      <div class="roles-list">
+        <label *ngFor="let role of assignableRoles" class="role-checkbox">
+          <input
+            type="checkbox"
+            [checked]="selectedRoleNames.includes(role.name)"
+            (change)="toggleRole(role.name)"
+          />
+          {{ role.name }}
+        </label>
+      </div>
+      <div *ngIf="rolesError" class="error-message">{{ rolesError }}</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" (click)="saveRoles()">Save roles</button>
+      </div>
+
+      <hr class="section-divider" />
+      <h2>Actions</h2>
+      <div class="form-actions">
+        <button *ngIf="user.isActive" type="button" class="btn btn-secondary" (click)="deactivate()">Deactivate user</button>
+        <button *ngIf="!user.isActive" type="button" class="btn btn-primary" (click)="activate()">Activate user</button>
+        <button type="button" class="btn btn-danger" (click)="deleteUser()">Delete user</button>
+      </div>
+    </ng-container>
+  </div>
+</div>

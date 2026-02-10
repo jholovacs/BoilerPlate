@@ -24,4 +24,14 @@ public class RoleDto
     ///     Normalized role name
     /// </summary>
     public string? NormalizedName { get; set; }
+
+    /// <summary>
+    ///     Optional description
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    ///     True if this is a predefined system role that cannot be deleted or renamed via API/UI.
+    /// </summary>
+    public bool IsSystemRole { get; set; }
 }

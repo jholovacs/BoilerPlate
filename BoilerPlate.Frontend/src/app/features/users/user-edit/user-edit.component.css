@@ -1,0 +1,75 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.back-link {
+  color: #667eea;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.section-divider {
+  margin: 28px 0;
+  border: none;
+  border-top: 1px solid #e0e0e0;
+}
+
+.section-divider + h2 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.hint {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.roles-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+
+.role-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.role-checkbox input {
+  width: auto;
+}
+
+select {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+}

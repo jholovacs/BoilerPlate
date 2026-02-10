@@ -1,0 +1,60 @@
+<div class="wizard">
+  <div class="wizard-header">
+    <h2>Set up MFA for this tenant</h2>
+    <button type="button" class="modal-close" (click)="close()" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="wizard-steps">
+    <div class="step-indicator" [class.active]="currentStep >= 1" [class.done]="currentStep > 1">1</div>
+    <div class="step-line" [class.done]="currentStep > 1"></div>
+    <div class="step-indicator" [class.active]="currentStep >= 2" [class.done]="currentStep > 2">2</div>
+    <div class="step-line" [class.done]="currentStep > 2"></div>
+    <div class="step-indicator" [class.active]="currentStep >= 3" [class.done]="currentStep > 3">3</div>
+  </div>
+
+  <!-- Step 1: Introduction -->
+  <div *ngIf="currentStep === 1" class="wizard-step">
+    <h3>What is MFA?</h3>
+    <p>Multi-factor authentication (MFA) adds an extra layer of security by requiring users to verify their identity with a second factor (e.g. an authenticator app or SMS) in addition to their password.</p>
+    <h3>What happens when you enable it?</h3>
+    <p>Once MFA is required for this tenant, all users will be prompted to set up MFA the next time they sign in. They will need to complete MFA enrollment before they can access the application.</p>
+    <p class="wizard-hint">This wizard will enable the &quot;Require MFA for all users&quot; policy for <strong>{{ tenantName || 'this tenant' }}</strong>.</p>
+  </div>
+
+  <!-- Step 2: Enable MFA -->
+  <div *ngIf="currentStep === 2" class="wizard-step">
+    <h3>Enable MFA requirement</h3>
+    <p>Check the box below and click <strong>Enable MFA</strong> to require multi-factor authentication for all users in this tenant.</p>
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" [(ngModel)]="mfaRequired" name="mfaRequired" />
+        Require MFA for all users
+      </label>
+    </div>
+    <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+  </div>
+
+  <!-- Step 3: Complete -->
+  <div *ngIf="currentStep === 3" class="wizard-step">
+    <div class="success-icon" aria-hidden="true">✓</div>
+    <h3>MFA is now required</h3>
+    <p>Users in this tenant will be prompted to set up multi-factor authentication on their next login. They will need to complete enrollment before they can continue.</p>
+    <p class="wizard-hint">You can turn off this requirement at any time from the MFA Policy tab.</p>
+  </div>
+
+  <div class="wizard-footer">
+    <ng-container *ngIf="currentStep === 1">
+      <button type="button" class="btn btn-secondary" (click)="close()">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="next()">Next</button>
+    </ng-container>
+    <ng-container *ngIf="currentStep === 2">
+      <button type="button" class="btn btn-secondary" (click)="back()">Back</button>
+      <button type="button" class="btn btn-primary" (click)="enableMfa()" [disabled]="isSaving || !mfaRequired">
+        {{ isSaving ? 'Enabling...' : 'Enable MFA' }}
+      </button>
+    </ng-container>
+    <ng-container *ngIf="currentStep === 3">
+      <button type="button" class="btn btn-primary" (click)="finish()">Finish</button>
+    </ng-container>
+  </div>
+</div>

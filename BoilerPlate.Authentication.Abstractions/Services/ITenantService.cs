@@ -49,7 +49,7 @@ public interface ITenantService
     Task<bool> DeleteTenantAsync(Guid tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Onboards a new tenant with default roles (Tenant Administrator and User Administrator)
+    ///     Onboards a new tenant with default roles (Tenant, User, and Role Administrator; system tenant also gets Service Administrator).
     /// </summary>
     /// <param name="request">Create tenant request</param>
     /// <param name="cancellationToken">Cancellation token</param>

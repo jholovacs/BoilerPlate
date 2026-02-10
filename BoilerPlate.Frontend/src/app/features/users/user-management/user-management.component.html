@@ -1,0 +1,60 @@
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <a [routerLink]="tenantEditUrl()" class="back-link">← Back to {{ tenantName || 'tenant' }}</a>
+      <h1>Users{{ tenantName ? ' — ' + tenantName : '' }}</h1>
+    </div>
+    <button class="btn btn-secondary" (click)="authService.logout()">Logout</button>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <input
+          type="text"
+          [(ngModel)]="searchTerm"
+          (input)="filterUsers()"
+          placeholder="Search by name, email, username..."
+          class="search-input"
+        />
+      </div>
+      <a *ngIf="canCreateUser()" [routerLink]="createUserUrl()" class="btn btn-primary">Create user</a>
+    </div>
+
+    <div *ngIf="isLoading" class="loading">Loading users...</div>
+    <div *ngIf="!isLoading && filteredUsers.length === 0" class="empty-state">
+      {{ searchTerm ? 'No users match your search.' : 'No users found.' }}
+    </div>
+
+    <table *ngIf="!isLoading && filteredUsers.length > 0" class="table">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Roles</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let user of filteredUsers">
+          <td>{{ user.userName }}</td>
+          <td>{{ user.email || '-' }}</td>
+          <td>{{ fullName(user) }}</td>
+          <td>
+            <span [class]="user.isActive ? 'status-active' : 'status-inactive'">
+              {{ user.isActive ? 'Active' : 'Inactive' }}
+            </span>
+          </td>
+          <td>{{ (user.roles || []).join(', ') || '-' }}</td>
+          <td>{{ formatDate(user.createdAt) }}</td>
+          <td>
+            <a [routerLink]="editUserUrl(user.id)" class="btn btn-secondary btn-sm">Edit</a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

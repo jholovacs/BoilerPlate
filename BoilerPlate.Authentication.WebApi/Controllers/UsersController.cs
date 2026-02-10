@@ -65,6 +65,60 @@ public class UsersController : ControllerBase
         return User.IsInRole("Service Administrator");
     }
 
+    private bool IsTenantAdministrator() => User.IsInRole("Tenant Administrator");
+    private bool IsUserAdministrator() => User.IsInRole("User Administrator");
+
+    private const string RoleServiceAdministrator = "Service Administrator";
+    private const string RoleTenantAdministrator = "Tenant Administrator";
+
+    /// <summary>
+    ///     Validates that the current user is allowed to assign the given roles to a user in targetTenantId.
+    ///     Returns null if allowed, or an error message for 403.
+    /// </summary>
+    private string? ValidateRoleAssignment(IEnumerable<string> roles, Guid targetTenantId)
+    {
+        var currentTenantId = ClaimsHelper.GetTenantId(User);
+        var roleList = roles.ToList();
+        if (IsUserAdministrator())
+        {
+            if (roleList.Any(r => string.Equals(r, RoleTenantAdministrator, StringComparison.OrdinalIgnoreCase)) ||
+                roleList.Any(r => string.Equals(r, RoleServiceAdministrator, StringComparison.OrdinalIgnoreCase)))
+                return "User Administrators cannot assign Tenant Administrator or Service Administrator roles.";
+        }
+        if (IsTenantAdministrator())
+        {
+            if (roleList.Any(r => string.Equals(r, RoleServiceAdministrator, StringComparison.OrdinalIgnoreCase)))
+                return "Tenant Administrators cannot assign the Service Administrator role.";
+        }
+        if (IsServiceAdministrator() && currentTenantId.HasValue && targetTenantId != currentTenantId.Value)
+        {
+            if (roleList.Any(r => string.Equals(r, RoleServiceAdministrator, StringComparison.OrdinalIgnoreCase)))
+                return "The Service Administrator role can only be assigned to users in your own tenant.";
+        }
+        return null;
+    }
+
+    /// <summary>
+    ///     Gets the target tenant ID for a user operation. Service Administrators can act on any user (returns that user's tenant);
+    ///     others may only act on users in their own tenant. Returns null if user not found, Guid.Empty if forbidden (user in another tenant).
+    /// </summary>
+    private async Task<Guid?> GetTargetTenantIdAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var currentTenantId = ClaimsHelper.GetTenantId(User);
+        if (IsServiceAdministrator())
+        {
+            var userEntity = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+            return userEntity?.TenantId;
+        }
+        if (!currentTenantId.HasValue) return null;
+        var userInTenant = await _context.Users
+            .AnyAsync(u => u.Id == userId && u.TenantId == currentTenantId.Value, cancellationToken);
+        if (userInTenant) return currentTenantId;
+        var userExistsElsewhere = await _context.Users.AnyAsync(u => u.Id == userId, cancellationToken);
+        return userExistsElsewhere ? Guid.Empty : null; // Empty = forbidden, null = not found
+    }
+
     /// <summary>
     ///     Creates a new user.
     ///     Service Administrators can create users in any tenant by specifying tenantId in the request.
@@ -142,19 +196,35 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
-    ///     Gets all users in the current tenant
+    ///     Gets all users. Service Administrators may pass optional tenantId to list users in any tenant;
+    ///     otherwise uses the current user's tenant.
     /// </summary>
+    /// <param name="tenantId">Optional tenant ID (Service Administrators only).</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of users</returns>
     /// <response code="200">Returns the list of users</response>
     /// <response code="401">Unauthorized - Tenant Administrator or User Administrator role required</response>
+    /// <response code="403">Forbidden - Non-Service Administrators cannot filter by another tenant</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers(CancellationToken cancellationToken)
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers([FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var users = await _userService.GetAllUsersAsync(tenantId, cancellationToken);
+        Guid targetTenantId;
+        var currentTenantId = ClaimsHelper.GetTenantId(User);
+        if (IsServiceAdministrator())
+        {
+            targetTenantId = tenantId ?? currentTenantId ?? throw new UnauthorizedAccessException("Tenant ID not found in token claims");
+        }
+        else
+        {
+            if (!currentTenantId.HasValue) throw new UnauthorizedAccessException("Tenant ID not found in token claims");
+            if (tenantId.HasValue && tenantId.Value != currentTenantId.Value)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot list users for another tenant." });
+            targetTenantId = currentTenantId.Value;
+        }
+        var users = await _userService.GetAllUsersAsync(targetTenantId, cancellationToken);
         return Ok(users);
     }
 
@@ -281,13 +351,19 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<UserDto>> UpdateUser(Guid id, [FromBody] UpdateUserRequest request,
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var tenantId = GetCurrentTenantId();
-        var user = await _userService.UpdateUserAsync(tenantId, id, request, cancellationToken);
+        var tenantId = await GetTargetTenantIdAsync(id, cancellationToken);
+        if (tenantId == null)
+            return NotFound(new { error = "User not found", userId = id });
+        if (tenantId == Guid.Empty)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot update users in other tenants." });
+
+        var user = await _userService.UpdateUserAsync(tenantId.Value, id, request, cancellationToken);
 
         if (user == null)
             return NotFound(new { error = "User not found or update failed. Email may already exist.", userId = id });
@@ -310,10 +386,16 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var result = await _userService.DeleteUserAsync(tenantId, id, cancellationToken);
+        var tenantId = await GetTargetTenantIdAsync(id, cancellationToken);
+        if (tenantId == null)
+            return NotFound(new { error = "User not found", userId = id });
+        if (tenantId == Guid.Empty)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot delete users in other tenants." });
+
+        var result = await _userService.DeleteUserAsync(tenantId.Value, id, cancellationToken);
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
@@ -335,10 +417,16 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ActivateUser(Guid id, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var result = await _userService.ActivateUserAsync(tenantId, id, cancellationToken);
+        var tenantId = await GetTargetTenantIdAsync(id, cancellationToken);
+        if (tenantId == null)
+            return NotFound(new { error = "User not found", userId = id });
+        if (tenantId == Guid.Empty)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot activate users in other tenants." });
+
+        var result = await _userService.ActivateUserAsync(tenantId.Value, id, cancellationToken);
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
@@ -360,10 +448,16 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeactivateUser(Guid id, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var result = await _userService.DeactivateUserAsync(tenantId, id, cancellationToken);
+        var tenantId = await GetTargetTenantIdAsync(id, cancellationToken);
+        if (tenantId == null)
+            return NotFound(new { error = "User not found", userId = id });
+        if (tenantId == Guid.Empty)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot deactivate users in other tenants." });
+
+        var result = await _userService.DeactivateUserAsync(tenantId.Value, id, cancellationToken);
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
@@ -485,6 +579,10 @@ public class UsersController : ControllerBase
             
             targetTenantId = currentTenantId.Value;
         }
+
+        var roleAssignmentError = ValidateRoleAssignment(request.Roles, targetTenantId);
+        if (roleAssignmentError != null)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = roleAssignmentError });
 
         var result = await _userService.AssignRolesAsync(targetTenantId, id, request.Roles, cancellationToken);
 

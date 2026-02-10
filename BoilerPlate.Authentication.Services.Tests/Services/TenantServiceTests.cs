@@ -51,7 +51,7 @@ public class TenantServiceTests : IDisposable
 
     /// <summary>
     ///     Test case: OnboardTenantAsync should successfully create a tenant and default roles when provided with valid request data.
-    ///     This verifies that tenant onboarding creates the tenant entity, creates default roles (Tenant Administrator and User Administrator),
+    ///     This verifies that tenant onboarding creates the tenant entity, creates default roles (Tenant, User, and Role Administrator),
     ///     and publishes the TenantOnboardedEvent. Note: This test may fail with transaction warnings in in-memory database scenarios,
     ///     which is a known limitation of EF Core in-memory provider not supporting transactions.
     ///     Why it matters: Tenant onboarding is a critical operation that must create all necessary infrastructure (tenant, roles) atomically.
@@ -87,9 +87,10 @@ public class TenantServiceTests : IDisposable
             .Where(r => r.TenantId == result.Id)
             .ToListAsync();
 
-        roles.Should().HaveCount(2);
+        roles.Should().HaveCount(3);
         roles.Should().Contain(r => r.Name == "Tenant Administrator");
         roles.Should().Contain(r => r.Name == "User Administrator");
+        roles.Should().Contain(r => r.Name == "Role Administrator");
 
         // Verify event was published
         _topicPublisherMock.Verify(

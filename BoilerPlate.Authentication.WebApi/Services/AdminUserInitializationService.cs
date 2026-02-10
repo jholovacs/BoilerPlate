@@ -4,6 +4,7 @@ using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BoilerPlate.Authentication.WebApi.Services;
 
@@ -183,6 +184,9 @@ public class AdminUserInitializationService : IHostedService
                 _logger.LogInformation("Admin user already has Service Administrator role");
             }
 
+            // Ensure system.local is registered as an email domain for the system tenant
+            await EnsureSystemLocalDomainAsync(systemTenantId.Value, scope.ServiceProvider, cancellationToken);
+
             _logger.LogInformation("Admin user initialization completed successfully");
         }
         catch (Exception ex)
@@ -246,5 +250,36 @@ public class AdminUserInitializationService : IHostedService
 
         _logger.LogInformation("System tenant created: {TenantId}", newTenant.Id);
         return newTenant.Id;
+    }
+
+    /// <summary>
+    ///     Ensures "system.local" is registered as a tenant email domain for the system tenant so login by email domain can resolve the tenant.
+    /// </summary>
+    private static async Task EnsureSystemLocalDomainAsync(Guid systemTenantId, IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        const string systemLocalDomain = "system.local";
+        var tenantEmailDomainService = serviceProvider.GetRequiredService<ITenantEmailDomainService>();
+
+        var existingDomains = await tenantEmailDomainService.GetTenantEmailDomainsByTenantIdAsync(systemTenantId, cancellationToken);
+        if (existingDomains.Any(d => string.Equals(d.Domain, systemLocalDomain, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var request = new CreateTenantEmailDomainRequest
+        {
+            TenantId = systemTenantId,
+            Domain = systemLocalDomain,
+            Description = "Default domain for the system tenant (e.g. admin@system.local)",
+            IsActive = true
+        };
+
+        var created = await tenantEmailDomainService.CreateTenantEmailDomainAsync(request, cancellationToken);
+        if (created != null)
+        {
+            var logger = serviceProvider.GetRequiredService<ILogger<AdminUserInitializationService>>();
+            logger.LogInformation("Registered email domain {Domain} for system tenant {TenantId}", systemLocalDomain, systemTenantId);
+        }
     }
 }

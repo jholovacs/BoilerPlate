@@ -126,12 +126,83 @@ export class AuthService {
     return AuthService.userHasServiceAdministratorRole(user);
   }
 
+  /** True if the current user can manage users (Service, Tenant, or User Administrator). */
+  canManageUsers(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userCanManageUsers(user);
+  }
+
+  /** True if the current user is a Tenant Administrator (can edit their tenant's settings). */
+  isTenantAdministrator(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userHasTenantAdministratorRole(user);
+  }
+
+  /** True if the current user is a Role Administrator (can create/manage custom roles in their tenant). */
+  isRoleAdministrator(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userHasRoleAdministratorRole(user);
+  }
+
+  /** True if the current user can create and manage custom roles (Service, Tenant, or Role Administrator). */
+  canManageRoles(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userCanManageRoles(user);
+  }
+
+  getCurrentUserId(): string | null {
+    const user = this.currentUserSubject.value;
+    return user?.id ?? null;
+  }
+
+  getCurrentTenantId(): string | null {
+    const user = this.currentUserSubject.value;
+    return user?.tenantId ?? null;
+  }
+
   private static readonly SERVICE_ADMIN_ROLE = 'Service Administrator';
+  private static readonly TENANT_ADMIN_ROLE = 'Tenant Administrator';
+  private static readonly USER_ADMIN_ROLE = 'User Administrator';
+  private static readonly ROLE_ADMIN_ROLE = 'Role Administrator';
 
   /** Check if a user has the Service Administrator role (use this with LoginResult.user to avoid timing issues). */
   static userHasServiceAdministratorRole(user: UserInfo | null | undefined): boolean {
     if (!user?.roles?.length) return false;
     return user.roles.some(r => AuthService.normalizeRole(r) === AuthService.SERVICE_ADMIN_ROLE);
+  }
+
+  /** Check if a user has the Tenant Administrator role. */
+  static userHasTenantAdministratorRole(user: UserInfo | null | undefined): boolean {
+    if (!user?.roles?.length) return false;
+    return user.roles.some(r => AuthService.normalizeRole(r) === AuthService.TENANT_ADMIN_ROLE);
+  }
+
+  /** Check if a user has the Role Administrator role. */
+  static userHasRoleAdministratorRole(user: UserInfo | null | undefined): boolean {
+    if (!user?.roles?.length) return false;
+    return user.roles.some(r => AuthService.normalizeRole(r) === AuthService.ROLE_ADMIN_ROLE);
+  }
+
+  /** Check if a user can manage users (Service, Tenant, or User Administrator). */
+  static userCanManageUsers(user: UserInfo | null | undefined): boolean {
+    if (!user?.roles?.length) return false;
+    const normalized = user.roles.map(r => AuthService.normalizeRole(r));
+    return normalized.some(r =>
+      r === AuthService.SERVICE_ADMIN_ROLE ||
+      r === AuthService.TENANT_ADMIN_ROLE ||
+      r === AuthService.USER_ADMIN_ROLE
+    );
+  }
+
+  /** Check if a user can create and manage custom roles (Service, Tenant, or Role Administrator). */
+  static userCanManageRoles(user: UserInfo | null | undefined): boolean {
+    if (!user?.roles?.length) return false;
+    const normalized = user.roles.map(r => AuthService.normalizeRole(r));
+    return normalized.some(r =>
+      r === AuthService.SERVICE_ADMIN_ROLE ||
+      r === AuthService.TENANT_ADMIN_ROLE ||
+      r === AuthService.ROLE_ADMIN_ROLE
+    );
   }
 
   /** Normalize role string for comparison (trim, normalize spaces). */

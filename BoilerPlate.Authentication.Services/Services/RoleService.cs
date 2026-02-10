@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.Database;
@@ -103,11 +104,8 @@ public class RoleService : IRoleService
 
         if (role == null) return null;
 
-        // Prevent modification of protected system roles
-        if (IsProtectedSystemRole(role.Name)) return null;
-
-        // Prevent renaming to a protected system role name
-        if (IsProtectedSystemRole(request.Name) && request.Name != role.Name) return null;
+        if (PredefinedRoleNames.IsProtected(role.Name ?? string.Empty)) return null;
+        if (PredefinedRoleNames.IsProtected(request.Name) && request.Name != role.Name) return null;
 
         // Check if new name already exists in tenant (if different from current)
         if (request.Name != role.Name)
@@ -140,8 +138,7 @@ public class RoleService : IRoleService
 
         if (role == null) return false;
 
-        // Prevent deletion of protected system roles
-        if (IsProtectedSystemRole(role.Name)) return false;
+        if (PredefinedRoleNames.IsProtected(role.Name ?? string.Empty)) return false;
 
         var result = await _roleManager.DeleteAsync(role);
         return result.Succeeded;
@@ -183,17 +180,6 @@ public class RoleService : IRoleService
         return userDtos;
     }
 
-    /// <summary>
-    ///     Checks if a role is a protected system role that cannot be modified or deleted
-    /// </summary>
-    /// <param name="roleName">The role name to check</param>
-    /// <returns>True if the role is protected, false otherwise</returns>
-    private static bool IsProtectedSystemRole(string roleName)
-    {
-        var protectedRoles = new[] { "Service Administrator", "Tenant Administrator", "User Administrator" };
-        return protectedRoles.Contains(roleName, StringComparer.OrdinalIgnoreCase);
-    }
-
     private static RoleDto MapToRoleDto(ApplicationRole role)
     {
         return new RoleDto
@@ -201,7 +187,9 @@ public class RoleService : IRoleService
             Id = role.Id,
             TenantId = role.TenantId,
             Name = role.Name ?? string.Empty,
-            NormalizedName = role.NormalizedName
+            NormalizedName = role.NormalizedName,
+            Description = role.Description,
+            IsSystemRole = PredefinedRoleNames.IsProtected(role.Name ?? string.Empty)
         };
     }
 }

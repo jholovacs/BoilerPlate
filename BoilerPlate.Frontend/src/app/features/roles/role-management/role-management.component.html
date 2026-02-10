@@ -1,0 +1,41 @@
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <a [routerLink]="tenantEditUrl()" class="back-link">← Back to {{ tenantName || 'tenant' }}</a>
+      <h1>Roles{{ tenantName ? ' — ' + tenantName : '' }}</h1>
+    </div>
+    <button class="btn btn-secondary" (click)="authService.logout()">Logout</button>
+  </div>
+
+  <div class="card">
+    <p class="hint">Predefined system roles cannot be renamed or deleted. You can create custom roles and edit or delete them.</p>
+    <div class="toolbar">
+      <a [routerLink]="createRoleUrl()" class="btn btn-primary">Create role</a>
+    </div>
+    <div *ngIf="isLoading" class="loading">Loading roles...</div>
+    <div *ngIf="!isLoading && roles.length === 0" class="empty-state">No roles found.</div>
+    <table *ngIf="!isLoading && roles.length > 0" class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Type</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let role of roles">
+          <td>{{ role.name }}</td>
+          <td>{{ role.description || '—' }}</td>
+          <td>
+            <span *ngIf="role.isSystemRole" class="badge badge-system">System role</span>
+            <span *ngIf="!role.isSystemRole" class="badge badge-custom">Custom</span>
+          </td>
+          <td>
+            <a [routerLink]="editRoleUrl(role.id)" class="btn btn-secondary btn-sm">{{ role.isSystemRole ? 'View' : 'Edit' }}</a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

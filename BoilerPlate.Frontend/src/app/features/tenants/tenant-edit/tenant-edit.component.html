@@ -1,0 +1,372 @@
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <a [routerLink]="authService.isServiceAdministrator() ? ['/tenants'] : ['/my-tenant/settings']" class="back-link">
+        {{ authService.isServiceAdministrator() ? '← Back to Tenants' : '← Back to My tenant settings' }}
+      </a>
+      <h1>{{ tenant?.name ?? 'Tenant Edit' }}</h1>
+      <nav class="tenant-subnav" *ngIf="tenantId">
+        <a *ngIf="authService.canManageUsers()" [routerLink]="['/tenants', tenantId, 'users']" class="nav-link">Users</a>
+        <a *ngIf="authService.canManageRoles()" [routerLink]="['/tenants', tenantId, 'roles']" class="nav-link">Roles</a>
+      </nav>
+    </div>
+    <button class="btn btn-secondary" (click)="logout()">Logout</button>
+  </div>
+
+  <div *ngIf="isLoading" class="loading">Loading tenant...</div>
+  <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+
+  <ng-container *ngIf="!isLoading && tenant">
+    <div class="tabs">
+      <button
+        *ngFor="let tab of tabs"
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab() === tab.id"
+        (click)="setActiveTab(tab.id)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <div class="tab-content card">
+      <!-- General -->
+      <div *ngIf="activeTab() === 'general'" class="tab-panel">
+        <h2>General Settings</h2>
+        <form (ngSubmit)="saveGeneral()">
+          <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" [(ngModel)]="generalForm.name" name="name" required />
+          </div>
+          <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" [(ngModel)]="generalForm.description" name="description"></textarea>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" [(ngModel)]="generalForm.isActive" name="isActive" />
+              Active
+            </label>
+          </div>
+          <div *ngIf="generalError" class="error-message">{{ generalError }}</div>
+          <div *ngIf="generalSuccess" class="success-message">{{ generalSuccess }}</div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="isSavingGeneral">
+              {{ isSavingGeneral ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- SAML2 -->
+      <div *ngIf="activeTab() === 'saml2'" class="tab-panel">
+        <h2>SAML2 SSO Configuration</h2>
+        <form (ngSubmit)="saveSaml2()">
+          <div class="form-group">
+            <label>
+              <input type="checkbox" [(ngModel)]="saml2Form.isEnabled" name="saml2Enabled" />
+              Enable SAML2 SSO
+            </label>
+          </div>
+          <fieldset class="form-section">
+            <legend>Identity Provider (IdP)</legend>
+            <div class="form-group">
+              <label for="idpEntityId">IdP Entity ID</label>
+              <input type="text" id="idpEntityId" [(ngModel)]="saml2Form.idpEntityId" name="idpEntityId" placeholder="https://idp.example.com/metadata" />
+            </div>
+            <div class="form-group">
+              <label for="idpSsoServiceUrl">IdP SSO Service URL</label>
+              <input type="url" id="idpSsoServiceUrl" [(ngModel)]="saml2Form.idpSsoServiceUrl" name="idpSsoServiceUrl" placeholder="https://idp.example.com/sso" />
+            </div>
+            <div class="form-group">
+              <label for="idpCertificate">IdP Certificate (Base64)</label>
+              <textarea id="idpCertificate" [(ngModel)]="saml2Form.idpCertificate" name="idpCertificate" rows="4" placeholder="Paste IdP X.509 certificate as Base64"></textarea>
+            </div>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>Service Provider (SP)</legend>
+            <div class="form-group">
+              <label for="spEntityId">SP Entity ID</label>
+              <input type="text" id="spEntityId" [(ngModel)]="saml2Form.spEntityId" name="spEntityId" placeholder="https://auth.example.com/saml2" />
+            </div>
+            <div class="form-group">
+              <label for="nameIdFormat">Name ID Format</label>
+              <input type="text" id="nameIdFormat" [(ngModel)]="saml2Form.nameIdFormat" name="nameIdFormat" />
+            </div>
+            <div class="form-group">
+              <label for="spCertificate">SP Signing Certificate (Base64)</label>
+              <textarea id="spCertificate" [(ngModel)]="saml2Form.spCertificate" name="spCertificate" rows="4"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="spPrivateKey">SP Certificate Private Key (Base64)</label>
+              <textarea id="spPrivateKey" [(ngModel)]="saml2Form.spCertificatePrivateKey" name="spCertificatePrivateKey" rows="4"></textarea>
+            </div>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>Options</legend>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="saml2Form.signAuthnRequest" name="signAuthnRequest" />
+                Sign authentication requests
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="saml2Form.requireSignedResponse" name="requireSignedResponse" />
+                Require signed SAML responses
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="saml2Form.requireEncryptedAssertion" name="requireEncryptedAssertion" />
+                Require encrypted assertions
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="clockSkew">Clock skew (minutes)</label>
+              <input type="number" id="clockSkew" [(ngModel)]="saml2Form.clockSkewMinutes" name="clockSkewMinutes" min="0" />
+            </div>
+            <div class="form-group">
+              <label for="attributeMapping">Attribute mapping (JSON)</label>
+              <textarea id="attributeMapping" [(ngModel)]="saml2Form.attributeMapping" name="attributeMapping" rows="3" placeholder='{"email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"}'></textarea>
+            </div>
+          </fieldset>
+          <div *ngIf="saml2Error" class="error-message">{{ saml2Error }}</div>
+          <div *ngIf="saml2Success" class="success-message">{{ saml2Success }}</div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="isSavingSaml2">{{ isSavingSaml2 ? 'Saving...' : 'Save SAML2 Settings' }}</button>
+            <button *ngIf="saml2Settings" type="button" class="btn btn-danger" (click)="deleteSaml2()">Delete SAML2 Settings</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Settings -->
+      <div *ngIf="activeTab() === 'settings'" class="tab-panel">
+        <h2>Tenant Settings (Key-Value)</h2>
+        <div class="add-setting">
+          <input type="text" [(ngModel)]="newSettingKey" placeholder="Key" />
+          <input type="text" [(ngModel)]="newSettingValue" placeholder="Value" />
+          <button type="button" class="btn btn-primary" (click)="addSetting()" [disabled]="!newSettingKey.trim()">Add</button>
+        </div>
+        <div *ngIf="settingsError" class="error-message">{{ settingsError }}</div>
+        <div *ngIf="settingsSuccess" class="success-message">{{ settingsSuccess }}</div>
+        <div *ngIf="settingsLoading" class="loading">Loading settings...</div>
+        <table *ngIf="!settingsLoading && settings.length" class="table">
+          <thead>
+            <tr><th>Key</th><th>Value</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of settings">
+              <ng-container *ngIf="editingSettingId !== s.id">
+                <td>{{ s.key }}</td>
+                <td>{{ s.value || '-' }}</td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="startEditSetting(s)">Edit</button>
+                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteSetting(s.id)">Delete</button>
+                </td>
+              </ng-container>
+              <ng-container *ngIf="editingSettingId === s.id">
+                <td><input type="text" [(ngModel)]="editingSettingKey" class="inline-input" /></td>
+                <td><input type="text" [(ngModel)]="editingSettingValue" class="inline-input" /></td>
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="saveSetting()">Save</button>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="cancelEditSetting()">Cancel</button>
+                </td>
+              </ng-container>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="!settingsLoading && !settings.length" class="empty-state">No settings. Add one above.</div>
+      </div>
+
+      <!-- MFA -->
+      <div *ngIf="activeTab() === 'mfa'" class="tab-panel">
+        <h2>MFA Policy</h2>
+        <p class="hint">When enabled, all users in this tenant will be required to enable multi-factor authentication.</p>
+        <div class="form-actions" style="margin-bottom: 20px;">
+          <button type="button" class="btn btn-primary" (click)="openMfaWizard()">Set up MFA (wizard)</button>
+        </div>
+        <form (ngSubmit)="saveMfa()">
+          <div class="form-group">
+            <label>
+              <input type="checkbox" [(ngModel)]="mfaRequired" name="mfaRequired" />
+              Require MFA for all users
+            </label>
+          </div>
+          <div *ngIf="mfaError" class="error-message">{{ mfaError }}</div>
+          <div *ngIf="mfaSuccess" class="success-message">{{ mfaSuccess }}</div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="isSavingMfa">{{ isSavingMfa ? 'Saving...' : 'Save MFA Policy' }}</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Password Policy -->
+      <div *ngIf="activeTab() === 'password-policy'" class="tab-panel">
+        <h2>Password Policy</h2>
+        <p class="hint">Configure password complexity, expiration, and reuse rules for this tenant. Users will be required to follow these rules when setting or changing their password.</p>
+        <div *ngIf="passwordPolicyLoading" class="loading">Loading password policy...</div>
+        <form *ngIf="!passwordPolicyLoading" (ngSubmit)="savePasswordPolicy()">
+          <fieldset class="form-section">
+            <legend>Complexity</legend>
+            <div class="form-group">
+              <label for="minimumLength">Minimum length</label>
+              <input type="number" id="minimumLength" [(ngModel)]="passwordPolicyForm.minimumLength" name="minimumLength" min="1" max="128" />
+              <span class="hint">Characters (default 10)</span>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="passwordPolicyForm.requireDigit" name="requireDigit" />
+                Require at least one digit
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="passwordPolicyForm.requireLowercase" name="requireLowercase" />
+                Require at least one lowercase letter
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="passwordPolicyForm.requireUppercase" name="requireUppercase" />
+                Require at least one uppercase letter
+              </label>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="passwordPolicyForm.requireNonAlphanumeric" name="requireNonAlphanumeric" />
+                Require at least one non-alphanumeric character (e.g. !, &#64;, #)
+              </label>
+            </div>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>Expiration &amp; history</legend>
+            <div class="form-group">
+              <label for="maximumLifetimeDays">Maximum password lifetime (days)</label>
+              <input type="number" id="maximumLifetimeDays" [(ngModel)]="passwordPolicyForm.maximumLifetimeDays" name="maximumLifetimeDays" min="0" />
+              <span class="hint">0 = no expiration (default 120)</span>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="passwordPolicyForm.enablePasswordHistory" name="enablePasswordHistory" />
+                Enable password history (prevent reuse)
+              </label>
+            </div>
+            <div class="form-group" *ngIf="passwordPolicyForm.enablePasswordHistory">
+              <label for="passwordHistoryCount">Number of previous passwords to remember</label>
+              <input type="number" id="passwordHistoryCount" [(ngModel)]="passwordPolicyForm.passwordHistoryCount" name="passwordHistoryCount" min="1" max="24" />
+              <span class="hint">Default 12</span>
+            </div>
+          </fieldset>
+          <div *ngIf="passwordPolicyError" class="error-message">{{ passwordPolicyError }}</div>
+          <div *ngIf="passwordPolicySuccess" class="success-message">{{ passwordPolicySuccess }}</div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="isSavingPasswordPolicy">
+              {{ isSavingPasswordPolicy ? 'Saving...' : 'Save Password Policy' }}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Email Domains -->
+      <div *ngIf="activeTab() === 'email-domains'" class="tab-panel">
+        <h2>Email Domains</h2>
+        <p class="hint">Map email domains to this tenant for automatic tenant selection during login.</p>
+        <div class="add-row">
+          <input type="text" [(ngModel)]="newDomain" placeholder="Domain (e.g., example.com)" />
+          <input type="text" [(ngModel)]="newDomainDescription" placeholder="Description" />
+          <button type="button" class="btn btn-primary" (click)="addDomain()" [disabled]="!newDomain.trim()">Add</button>
+        </div>
+        <div *ngIf="domainsError" class="error-message">{{ domainsError }}</div>
+        <div *ngIf="domainsSuccess" class="success-message">{{ domainsSuccess }}</div>
+        <div *ngIf="emailDomainsLoading" class="loading">Loading...</div>
+        <table *ngIf="!emailDomainsLoading && emailDomains.length" class="table">
+          <thead>
+            <tr><th>Domain</th><th>Description</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of emailDomains">
+              <ng-container *ngIf="editingDomainId !== d.id">
+                <td>{{ d.domain }}</td>
+                <td>{{ d.description || '-' }}</td>
+                <td><span [class]="d.isActive ? 'status-active' : 'status-inactive'">{{ d.isActive ? 'Active' : 'Inactive' }}</span></td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="startEditDomain(d)">Edit</button>
+                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteDomain(d.id)">Delete</button>
+                </td>
+              </ng-container>
+              <ng-container *ngIf="editingDomainId === d.id">
+                <td><input type="text" [(ngModel)]="editingDomain" class="inline-input" /></td>
+                <td><input type="text" [(ngModel)]="editingDomainDescription" class="inline-input" /></td>
+                <td>
+                  <label><input type="checkbox" [(ngModel)]="editingDomainActive" /> Active</label>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="saveDomain()">Save</button>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="cancelEditDomain()">Cancel</button>
+                </td>
+              </ng-container>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="!emailDomainsLoading && !emailDomains.length" class="empty-state">No email domains.</div>
+      </div>
+
+      <!-- Vanity URLs -->
+      <div *ngIf="activeTab() === 'vanity-urls'" class="tab-panel">
+        <h2>Vanity URLs</h2>
+        <p class="hint">Map hostnames to this tenant for tenant-specific login URLs.</p>
+        <div class="add-row">
+          <input type="text" [(ngModel)]="newHostname" placeholder="Hostname (e.g., acme.example.com)" />
+          <input type="text" [(ngModel)]="newHostnameDescription" placeholder="Description" />
+          <button type="button" class="btn btn-primary" (click)="addVanityUrl()" [disabled]="!newHostname.trim()">Add</button>
+        </div>
+        <div *ngIf="vanityError" class="error-message">{{ vanityError }}</div>
+        <div *ngIf="vanitySuccess" class="success-message">{{ vanitySuccess }}</div>
+        <div *ngIf="vanityUrlsLoading" class="loading">Loading...</div>
+        <table *ngIf="!vanityUrlsLoading && vanityUrls.length" class="table">
+          <thead>
+            <tr><th>Hostname</th><th>Description</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let v of vanityUrls">
+              <ng-container *ngIf="editingVanityId !== v.id">
+                <td>{{ v.hostname }}</td>
+                <td>{{ v.description || '-' }}</td>
+                <td><span [class]="v.isActive ? 'status-active' : 'status-inactive'">{{ v.isActive ? 'Active' : 'Inactive' }}</span></td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="startEditVanity(v)">Edit</button>
+                  <button type="button" class="btn btn-danger btn-sm" (click)="deleteVanity(v.id)">Delete</button>
+                </td>
+              </ng-container>
+              <ng-container *ngIf="editingVanityId === v.id">
+                <td><input type="text" [(ngModel)]="editingHostname" class="inline-input" /></td>
+                <td><input type="text" [(ngModel)]="editingHostnameDescription" class="inline-input" /></td>
+                <td>
+                  <label><input type="checkbox" [(ngModel)]="editingVanityActive" /> Active</label>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-primary btn-sm" (click)="saveVanity()">Save</button>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="cancelEditVanity()">Cancel</button>
+                </td>
+              </ng-container>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="!vanityUrlsLoading && !vanityUrls.length" class="empty-state">No vanity URLs.</div>
+      </div>
+    </div>
+  </ng-container>
+</div>
+
+<!-- MFA Setup Wizard modal -->
+<div *ngIf="showMfaWizard" class="modal-overlay" (click)="closeMfaWizard()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <app-mfa-setup-wizard
+      [tenantId]="tenantId"
+      [tenantName]="tenant?.name ?? ''"
+      (closed)="closeMfaWizard()"
+      (completed)="onMfaWizardCompleted()"
+    />
+  </div>
+</div>

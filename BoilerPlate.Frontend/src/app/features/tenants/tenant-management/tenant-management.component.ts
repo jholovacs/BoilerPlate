@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TenantService } from '../../../core/services/tenant.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { Router } from '@angular/router';
@@ -17,11 +18,20 @@ export interface Tenant {
 @Component({
   selector: 'app-tenant-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="container">
       <div class="header">
-        <h1>Tenant Management</h1>
+        <div class="header-left">
+          <h1>Tenant Management</h1>
+          <nav class="nav-links">
+            <a routerLink="/account" class="nav-link">Account</a>
+            <a routerLink="/users" class="nav-link">Users</a>
+            <a routerLink="/account/change-password" class="nav-link">Change password</a>
+            <a routerLink="/my-tenant/settings" class="nav-link">My tenant settings</a>
+            <a routerLink="/tenants" class="nav-link active">Tenants</a>
+          </nav>
+        </div>
         <button class="btn btn-secondary" (click)="logout()">Logout</button>
       </div>
 
@@ -65,7 +75,7 @@ export interface Tenant {
               </td>
               <td>{{ formatDate(tenant.createdAt) }}</td>
               <td>
-                <button class="btn btn-secondary" (click)="editTenant(tenant)">Edit</button>
+                <a [routerLink]="['/tenants', tenant.id, 'edit']" class="btn btn-secondary">Edit</a>
                 <button class="btn btn-danger" (click)="deleteTenant(tenant)">Delete</button>
               </td>
             </tr>
@@ -77,7 +87,7 @@ export interface Tenant {
     <div *ngIf="showModal" class="modal-overlay" (click)="closeModal()">
       <div class="modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h2>{{ editingTenant ? 'Edit Tenant' : 'Create Tenant' }}</h2>
+          <h2>Create Tenant</h2>
           <button class="modal-close" (click)="closeModal()">&times;</button>
         </div>
 
@@ -90,7 +100,6 @@ export interface Tenant {
               name="name"
               [(ngModel)]="formTenant.name"
               required
-              [disabled]="!!editingTenant"
             />
           </div>
 
@@ -136,13 +145,41 @@ export interface Tenant {
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       margin-bottom: 30px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .header h1 {
       color: #333;
       margin: 0;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      color: #667eea;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+
+    .nav-links a.active {
+      font-weight: 600;
     }
 
     .status-active {
@@ -174,7 +211,6 @@ export class TenantManagementComponent implements OnInit {
   searchTerm = '';
   isLoading = false;
   showModal = false;
-  editingTenant: Tenant | null = null;
   formTenant: Partial<Tenant> = {
     name: '',
     description: '',
@@ -224,23 +260,10 @@ export class TenantManagementComponent implements OnInit {
   }
 
   createTenant(): void {
-    this.editingTenant = null;
     this.formTenant = {
       name: '',
       description: '',
       isActive: true
-    };
-    this.showModal = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-  }
-
-  editTenant(tenant: Tenant): void {
-    this.editingTenant = tenant;
-    this.formTenant = {
-      name: tenant.name,
-      description: tenant.description || '',
-      isActive: tenant.isActive
     };
     this.showModal = true;
     this.errorMessage = '';
@@ -269,7 +292,6 @@ export class TenantManagementComponent implements OnInit {
 
   closeModal(): void {
     this.showModal = false;
-    this.editingTenant = null;
     this.formTenant = {
       name: '',
       description: '',
@@ -295,27 +317,7 @@ export class TenantManagementComponent implements OnInit {
       isActive: this.formTenant.isActive ?? true
     };
 
-    if (this.editingTenant) {
-      this.tenantService.updateTenant(this.editingTenant.id, request).subscribe({
-        next: () => {
-          this.isSaving = false;
-          this.successMessage = 'Tenant updated successfully';
-          setTimeout(() => {
-            this.closeModal();
-            this.loadTenants();
-          }, 1000);
-        },
-        error: (err) => {
-          this.isSaving = false;
-          if (err.error?.error) {
-            this.errorMessage = err.error.error;
-          } else {
-            this.errorMessage = 'Failed to update tenant. Please try again.';
-          }
-        }
-      });
-    } else {
-      this.tenantService.createTenant(request).subscribe({
+    this.tenantService.createTenant(request).subscribe({
         next: () => {
           this.isSaving = false;
           this.successMessage = 'Tenant created successfully';
@@ -333,7 +335,6 @@ export class TenantManagementComponent implements OnInit {
           }
         }
       });
-    }
   }
 
   formatDate(dateString: string): string {

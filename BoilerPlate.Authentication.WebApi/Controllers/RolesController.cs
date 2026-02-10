@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -41,51 +42,66 @@ public class RolesController : ControllerBase
         return tenantId.Value;
     }
 
+    private bool IsServiceAdministrator() => User.IsInRole("Service Administrator");
+
     /// <summary>
-    ///     Checks if a role is a protected system role that cannot be modified or deleted
+    ///     Gets the effective tenant ID for role operations. Service Administrators may pass an optional tenantId to act on any tenant; others use their current tenant.
     /// </summary>
-    /// <param name="roleName">The role name to check</param>
-    /// <returns>True if the role is protected, false otherwise</returns>
-    private static bool IsProtectedSystemRole(string roleName)
+    private Guid GetEffectiveTenantIdForRoles(Guid? requestTenantId)
     {
-        var protectedRoles = new[] { "Service Administrator", "Tenant Administrator", "User Administrator" };
-        return protectedRoles.Contains(roleName, StringComparer.OrdinalIgnoreCase);
+        if (IsServiceAdministrator() && requestTenantId.HasValue)
+            return requestTenantId.Value;
+        return GetCurrentTenantId();
     }
 
     /// <summary>
-    ///     Gets all roles in the current tenant
+    ///     Gets the list of predefined role names that cannot be deleted or renamed via API/UI. Use this in the UI to disable edit/delete for these roles.
     /// </summary>
+    /// <response code="200">Returns the list of protected system role names</response>
+    [HttpGet("protected-names")]
+    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult GetProtectedRoleNames()
+    {
+        return Ok(PredefinedRoleNames.All);
+    }
+
+    /// <summary>
+    ///     Gets all roles in a tenant. Service Administrators may pass optional tenantId to query any tenant; others use their own tenant.
+    /// </summary>
+    /// <param name="tenantId">Optional. Tenant ID (Service Administrators only); if omitted, current user's tenant is used.</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of roles</returns>
     /// <response code="200">Returns the list of roles</response>
-    /// <response code="401">Unauthorized - Tenant Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<RoleDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<IEnumerable<RoleDto>>> GetAllRoles(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<RoleDto>>> GetAllRoles([FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var roles = await _roleService.GetAllRolesAsync(tenantId, cancellationToken);
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
+        var roles = await _roleService.GetAllRolesAsync(effectiveTenantId, cancellationToken);
         return Ok(roles);
     }
 
     /// <summary>
-    ///     Gets a role by ID (within the current tenant)
+    ///     Gets a role by ID. Service Administrators may pass optional tenantId to query any tenant; others use their own tenant.
     /// </summary>
     /// <param name="id">Role ID (UUID)</param>
+    /// <param name="tenantId">Optional. Tenant ID (Service Administrators only).</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Role information</returns>
     /// <response code="200">Returns the role</response>
     /// <response code="404">Role not found</response>
-    /// <response code="401">Unauthorized - Tenant Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<RoleDto>> GetRoleById(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<RoleDto>> GetRoleById(Guid id, [FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var role = await _roleService.GetRoleByIdAsync(tenantId, id, cancellationToken);
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
+        var role = await _roleService.GetRoleByIdAsync(effectiveTenantId, id, cancellationToken);
 
         if (role == null) return NotFound(new { error = "Role not found", roleId = id });
 
@@ -93,22 +109,23 @@ public class RolesController : ControllerBase
     }
 
     /// <summary>
-    ///     Gets a role by name (within the current tenant)
+    ///     Gets a role by name. Service Administrators may pass optional tenantId to query any tenant; others use their own tenant.
     /// </summary>
     /// <param name="name">Role name</param>
+    /// <param name="tenantId">Optional. Tenant ID (Service Administrators only).</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Role information</returns>
     /// <response code="200">Returns the role</response>
     /// <response code="404">Role not found</response>
-    /// <response code="401">Unauthorized - Tenant Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("by-name/{name}")]
     [ProducesResponseType(typeof(RoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<RoleDto>> GetRoleByName(string name, CancellationToken cancellationToken)
+    public async Task<ActionResult<RoleDto>> GetRoleByName(string name, [FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
-        var role = await _roleService.GetRoleByNameAsync(tenantId, name, cancellationToken);
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
+        var role = await _roleService.GetRoleByNameAsync(effectiveTenantId, name, cancellationToken);
 
         if (role == null) return NotFound(new { error = "Role not found", roleName = name });
 
@@ -133,9 +150,9 @@ public class RolesController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var tenantId = GetCurrentTenantId();
+        // Service Administrators may set request.TenantId to create a role in any tenant; others use current tenant
+        var tenantId = GetEffectiveTenantIdForRoles(request.TenantId != default ? request.TenantId : null);
 
-        // Ensure the request uses the authenticated user's tenant (ignore any tenant ID in request)
         var createRequest = new CreateRoleRequest
         {
             TenantId = tenantId,
@@ -174,37 +191,35 @@ public class RolesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<RoleDto>> UpdateRole(Guid id, [FromBody] UpdateRoleRequest request,
-        CancellationToken cancellationToken)
+        [FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var tenantId = GetCurrentTenantId();
-
-        // Check if the role exists and is a protected system role
-        var existingRole = await _roleService.GetRoleByIdAsync(tenantId, id, cancellationToken);
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
+        var existingRole = await _roleService.GetRoleByIdAsync(effectiveTenantId, id, cancellationToken);
         if (existingRole == null) return NotFound(new { error = "Role not found", roleId = id });
 
-        if (IsProtectedSystemRole(existingRole.Name))
+        if (PredefinedRoleNames.IsProtected(existingRole.Name))
             return BadRequest(new
             {
                 error =
-                    "System roles (Service Administrator, Tenant Administrator, User Administrator) cannot be modified",
+                    "System roles (Service Administrator, Tenant Administrator, User Administrator, Role Administrator) cannot be modified",
                 roleName = existingRole.Name
             });
 
         // Also check if the new name would be a protected role
-        if (IsProtectedSystemRole(request.Name) && request.Name != existingRole.Name)
+        if (PredefinedRoleNames.IsProtected(request.Name) && request.Name != existingRole.Name)
             return BadRequest(new
                 { error = "Cannot rename a role to a protected system role name", roleName = request.Name });
 
-        var role = await _roleService.UpdateRoleAsync(tenantId, id, request, cancellationToken);
+        var role = await _roleService.UpdateRoleAsync(effectiveTenantId, id, request, cancellationToken);
 
         if (role == null)
             return BadRequest(new
                 { error = "Update failed. Role name may already exist in this tenant.", roleId = id });
 
         _logger.LogInformation("Role updated: {RoleId} - {RoleName} in tenant {TenantId}", role.Id, role.Name,
-            tenantId);
+            effectiveTenantId);
 
         return Ok(role);
     }
@@ -218,60 +233,59 @@ public class RolesController : ControllerBase
     /// <response code="204">Role deleted successfully</response>
     /// <response code="400">Attempting to delete a protected system role</response>
     /// <response code="404">Role not found</response>
-    /// <response code="401">Unauthorized - Tenant Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> DeleteRole(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeleteRole(Guid id, [FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
 
-        // Check if the role exists and is a protected system role
-        var role = await _roleService.GetRoleByIdAsync(tenantId, id, cancellationToken);
+        var role = await _roleService.GetRoleByIdAsync(effectiveTenantId, id, cancellationToken);
         if (role == null) return NotFound(new { error = "Role not found", roleId = id });
 
-        if (IsProtectedSystemRole(role.Name))
+        if (PredefinedRoleNames.IsProtected(role.Name))
             return BadRequest(new
             {
                 error =
-                    "System roles (Service Administrator, Tenant Administrator, User Administrator) cannot be deleted",
+                    "System roles (Service Administrator, Tenant Administrator, User Administrator, Role Administrator) cannot be deleted",
                 roleName = role.Name
             });
 
-        var result = await _roleService.DeleteRoleAsync(tenantId, id, cancellationToken);
+        var result = await _roleService.DeleteRoleAsync(effectiveTenantId, id, cancellationToken);
 
         if (!result) return BadRequest(new { error = "Failed to delete role", roleId = id });
 
-        _logger.LogInformation("Role deleted: {RoleId} in tenant {TenantId}", id, tenantId);
+        _logger.LogInformation("Role deleted: {RoleId} in tenant {TenantId}", id, effectiveTenantId);
 
         return NoContent();
     }
 
     /// <summary>
-    ///     Gets all users assigned to a role (within the current tenant)
+    ///     Gets all users assigned to a role. Service Administrators may pass optional tenantId to query any tenant; others use their own tenant.
     /// </summary>
     /// <param name="name">Role name</param>
+    /// <param name="tenantId">Optional. Tenant ID (Service Administrators only).</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of users</returns>
     /// <response code="200">Returns the list of users</response>
     /// <response code="404">Role not found</response>
-    /// <response code="401">Unauthorized - Tenant Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("{name}/users")]
     [ProducesResponseType(typeof(IEnumerable<UserDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IEnumerable<UserDto>>> GetUsersInRole(string name,
-        CancellationToken cancellationToken)
+        [FromQuery] Guid? tenantId, CancellationToken cancellationToken)
     {
-        var tenantId = GetCurrentTenantId();
+        var effectiveTenantId = GetEffectiveTenantIdForRoles(tenantId);
 
-        // Verify role exists
-        var role = await _roleService.GetRoleByNameAsync(tenantId, name, cancellationToken);
+        var role = await _roleService.GetRoleByNameAsync(effectiveTenantId, name, cancellationToken);
         if (role == null) return NotFound(new { error = "Role not found", roleName = name });
 
-        var users = await _roleService.GetUsersInRoleAsync(tenantId, name, cancellationToken);
+        var users = await _roleService.GetUsersInRoleAsync(effectiveTenantId, name, cancellationToken);
         return Ok(users);
     }
 }

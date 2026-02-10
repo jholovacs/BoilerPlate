@@ -37,7 +37,12 @@ import { AuthService } from '../../../core/services/auth.service';
             />
           </div>
 
-          <div class="form-group">
+          <div class="form-group" *ngIf="!showTenantId">
+            <button type="button" class="btn-link" (click)="showTenantId = true">
+              Need to specify tenant ID?
+            </button>
+          </div>
+          <div class="form-group" *ngIf="showTenantId">
             <label for="tenantId">Tenant ID (Optional)</label>
             <input
               type="text"
@@ -93,7 +98,21 @@ import { AuthService } from '../../../core/services/auth.service';
       color: #999;
     }
 
-    button {
+    .btn-link {
+      background: none;
+      border: none;
+      color: #667eea;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0;
+      text-decoration: underline;
+    }
+
+    .btn-link:hover {
+      color: #764ba2;
+    }
+
+    button:not(.btn-link) {
       width: 100%;
       margin-top: 10px;
     }
@@ -103,6 +122,7 @@ export class LoginComponent {
   username = '';
   password = '';
   tenantId = '';
+  showTenantId = false;
   errorMessage = '';
   isLoading = false;
 
@@ -124,9 +144,12 @@ export class LoginComponent {
       next: (result) => {
         if (AuthService.userHasServiceAdministratorRole(result.user)) {
           this.router.navigate(['/tenants']);
+        } else if (AuthService.userHasTenantAdministratorRole(result.user)) {
+          this.router.navigate(['/my-tenant/settings']);
+        } else if (AuthService.userCanManageUsers(result.user)) {
+          this.router.navigate(['/users']);
         } else {
-          this.errorMessage = 'Access denied. Service Administrator role required.';
-          this.authService.logout();
+          this.router.navigate(['/account']);
         }
       },
       error: (err) => {

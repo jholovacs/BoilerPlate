@@ -15,9 +15,9 @@ namespace BoilerPlate.Authentication.WebApi.Controllers.OData;
 
 /// <summary>
 ///     OData controller for Roles
-///     Accessible by Service Administrators (all tenants) or Tenant Administrators (their tenant only)
+///     Accessible by Service Administrators (all tenants), Tenant Administrators, or Role Administrators (their tenant only)
 /// </summary>
-[Authorize(Policy = AuthorizationPolicies.ODataAccess)]
+[Authorize(Policy = AuthorizationPolicies.RoleManagement)]
 [Route("odata")]
 [ODataRouteComponent("odata")]
 public class RolesODataController : ODataController

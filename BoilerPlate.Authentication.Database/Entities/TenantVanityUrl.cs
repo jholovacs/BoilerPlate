@@ -21,8 +21,8 @@ public class TenantVanityUrl
     public Tenant? Tenant { get; set; }
 
     /// <summary>
-    ///     Vanity URL hostname (e.g., "tenant1.foo.org", "acme.example.com")
-    ///     Must be unique across all tenants
+    ///     Vanity URL hostname (e.g., "tenant1.foo.org", "acme.example.com", or with port "app.example.com:5000")
+    ///     Must be unique across all tenants. When stored without a port, it matches the host on any port.
     /// </summary>
     public required string Hostname { get; set; }
 

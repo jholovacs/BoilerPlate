@@ -27,8 +27,9 @@ public static class AuthorizationPolicies
     public const string UserManagement = "UserManagementPolicy";
 
     /// <summary>
-    ///     Policy for role management - allows Service Administrators or Tenant Administrators
-    ///     Service Administrators can manage roles across all tenants, Tenant Administrators are restricted to their tenant
+    ///     Policy for role management - allows Service Administrators, Tenant Administrators, or Role Administrators
+    ///     Service Administrators can manage roles in any tenant; Tenant and Role Administrators are restricted to their tenant
+    ///     Role Administrators can create/manage custom roles but cannot assign users (use UserManagement for that)
     /// </summary>
     public const string RoleManagement = "RoleManagementPolicy";
 
@@ -77,9 +78,9 @@ public static class AuthorizationPolicyExtensions
             options.AddPolicy(AuthorizationPolicies.UserManagement, policy =>
                 policy.RequireRole("Service Administrator", "Tenant Administrator", "User Administrator"));
 
-            // Role Management Policy - allows Service Administrators or Tenant Administrators
+            // Role Management Policy - allows Service Administrators, Tenant Administrators, or Role Administrators
             options.AddPolicy(AuthorizationPolicies.RoleManagement, policy =>
-                policy.RequireRole("Service Administrator", "Tenant Administrator"));
+                policy.RequireRole("Service Administrator", "Tenant Administrator", "Role Administrator"));
 
             // OData Access Policy - allows Service Administrators or Tenant Administrators
             options.AddPolicy(AuthorizationPolicies.ODataAccess, policy =>

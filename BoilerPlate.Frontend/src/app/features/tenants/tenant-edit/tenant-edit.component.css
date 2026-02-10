@@ -1,0 +1,170 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.back-link {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.tenant-subnav {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.tenant-subnav .nav-link {
+  color: #667eea;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.tenant-subnav .nav-link:hover {
+  text-decoration: underline;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #333;
+}
+
+.tab-btn.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+}
+
+.tab-content {
+  margin-top: 0;
+  border-top-left-radius: 0;
+}
+
+.tab-panel {
+  padding: 24px 0;
+}
+
+.tab-panel h2 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.hint {
+  font-size: 13px;
+  color: #666;
+  margin: 4px 0 16px 0;
+}
+
+.form-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.form-section legend {
+  padding: 0 8px;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.add-setting {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.add-setting input {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.add-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.add-row input {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.inline-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.status-active {
+  color: #27ae60;
+  font-weight: 600;
+}
+
+.status-inactive {
+  color: #e74c3c;
+  font-weight: 600;
+}
