@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { VersionCheckService } from './core/services/version-check.service';
 
 @Component({
   selector: 'app-root',
@@ -9,6 +10,16 @@ import { RouterOutlet } from '@angular/router';
     <router-outlet></router-outlet>
   `
 })
-export class AppComponent {
+export class AppComponent implements OnInit, OnDestroy {
   title = 'BoilerPlate Authentication';
+  private versionCheck = inject(VersionCheckService);
+  private focusHandler = () => this.versionCheck.checkAndReloadIfNew();
+
+  ngOnInit(): void {
+    window.addEventListener('focus', this.focusHandler);
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('focus', this.focusHandler);
+  }
 }

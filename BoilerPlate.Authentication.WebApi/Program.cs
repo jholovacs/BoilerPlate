@@ -245,6 +245,28 @@ try
         // Add RabbitMQ service bus (connection string can be overridden via RABBITMQ_CONNECTION_STRING environment variable)
         builder.Services.AddRabbitMqServiceBus(builder.Configuration);
 
+    // Add CORS - allowed origins from CORS_ALLOWED_ORIGINS (comma-separated), or allow any for local dev if unset
+    var corsOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS");
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            if (string.IsNullOrWhiteSpace(corsOrigins))
+            {
+                policy.AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            }
+            else
+            {
+                foreach (var origin in corsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    policy.WithOrigins(origin);
+                policy.AllowAnyMethod()
+                    .AllowAnyHeader();
+            }
+        });
+    });
+
     // Add PostgreSQL database (required for migrations)
     builder.Services.AddAuthenticationDatabasePostgreSql(builder.Configuration);
 
@@ -296,8 +318,14 @@ try
 
     app.UseHttpsRedirection();
 
+    // CORS must be before UseRouting and endpoints
+    app.UseCors();
+
     // Enable routing (required for route-based middleware to work correctly)
     app.UseRouting();
+
+    // Global API exception handler - ensures unhandled exceptions return JSON 500 instead of empty/broken response
+    app.UseMiddleware<BoilerPlate.Authentication.WebApi.Middleware.ApiExceptionHandlerMiddleware>();
 
     // Request metrics middleware - must come after routing to access route information
     // This tracks request duration and count with route tags

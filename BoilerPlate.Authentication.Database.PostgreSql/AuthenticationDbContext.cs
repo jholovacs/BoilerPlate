@@ -106,5 +106,8 @@ public class AuthenticationDbContext : BaseAuthDbContext
             entity.Property(e => e.UpdatedAt)
                 .HasColumnType("timestamp with time zone");
         });
+
+        // Explicit table name for password history (snake_case)
+        builder.Entity<UserPasswordHistory>().ToTable("user_password_history");
     }
 }

@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 // For WebUtility
@@ -30,6 +31,7 @@ public class OAuthController : ControllerBase
     private readonly BaseAuthDbContext _context;
     private readonly JwtSettings _jwtSettings;
     private readonly JwtTokenService _jwtTokenService;
+    private readonly IHostEnvironment _hostEnvironment;
     private readonly ILogger<OAuthController> _logger;
     private readonly OAuthClientService _oauthClientService;
     private readonly RefreshTokenService _refreshTokenService;
@@ -49,7 +51,8 @@ public class OAuthController : ControllerBase
         OAuthClientService oauthClientService,
         BaseAuthDbContext context,
         IOptions<JwtSettings> jwtSettings,
-        ILogger<OAuthController> logger)
+        ILogger<OAuthController> logger,
+        IHostEnvironment hostEnvironment)
     {
         _authenticationService = authenticationService;
         _userService = userService;
@@ -61,6 +64,7 @@ public class OAuthController : ControllerBase
         _context = context;
         _jwtSettings = jwtSettings.Value;
         _logger = logger;
+        _hostEnvironment = hostEnvironment;
     }
 
     /// <summary>
@@ -274,12 +278,27 @@ public class OAuthController : ControllerBase
                 // Ignore errors when trying to extract request details
             }
             
-            _logger.LogError(ex, "Error processing OAuth token request. GrantType: {GrantType}, Username: {Username}",
-                grantType ?? "unknown", username ?? "unknown");
+            _logger.LogError(ex, "Error processing OAuth token request. GrantType: {GrantType}, Username: {Username}. Exception: {Message}",
+                grantType ?? "unknown", username ?? "unknown", ex.Message);
+
+            const string errorDescription = "An internal server error occurred while processing the token request. Please try again later.";
+
+            // In Development, include exception detail to aid debugging (not exposed in Production)
+            if (_hostEnvironment.IsDevelopment())
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    error = "server_error",
+                    error_description = errorDescription,
+                    detail = ex.Message,
+                    exceptionType = ex.GetType().Name
+                });
+            }
+
             return StatusCode(StatusCodes.Status500InternalServerError, new
             {
                 error = "server_error",
-                error_description = "An internal server error occurred while processing the token request. Please try again later."
+                error_description = errorDescription
             });
         }
     }

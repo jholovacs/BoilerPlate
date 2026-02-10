@@ -51,13 +51,31 @@ The frontend will be available at http://localhost:4200
 
 ## Configuration
 
-The frontend is configured to proxy API requests to the backend at `/api`. The nginx configuration handles this routing.
+### Authentication API base URL (`auth://`)
+
+Auth-related requests use the `auth://` URL scheme in code (e.g. `auth://oauth/token`). The actual base URL is set in **`src/auth-api.config.json`**.
+
+Edit `src/auth-api.config.json`:
+
+```json
+{
+  "authApiBaseUrl": "http://localhost:8080"
+}
+```
+
+- **Local dev (auth API on another port):** Set to your auth server, e.g. `http://localhost:8080`.
+- **Same-origin (e.g. reverse proxy or Docker):** Set to `""` so `auth://` paths become same-origin (e.g. `/oauth/token`).
+- **Production:** Set to your auth API origin, e.g. `https://auth.example.com`.
+
+The file is loaded at app startup and is included in the build output so it can be replaced per environment without rebuilding.
+
+The frontend also proxies `/api` (and when using same-origin auth, `/oauth`) to the backend when using the dev server; nginx handles this routing in Docker.
 
 ## API Endpoints
 
 The frontend communicates with the following API endpoints:
 
-- `POST /api/oauth/token` - Authentication
+- `POST auth://oauth/token` (resolved via `auth-api.config.json`) - Authentication
 - `GET /api/tenants` - Get all tenants
 - `GET /api/tenants/{id}` - Get tenant by ID
 - `POST /api/tenants` - Create tenant

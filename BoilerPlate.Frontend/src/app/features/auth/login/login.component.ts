@@ -121,8 +121,8 @@ export class LoginComponent {
     const tenantIdValue = this.tenantId.trim() || undefined;
 
     this.authService.login(this.username, this.password, tenantIdValue).subscribe({
-      next: () => {
-        if (this.authService.isServiceAdministrator()) {
+      next: (result) => {
+        if (AuthService.userHasServiceAdministratorRole(result.user)) {
           this.router.navigate(['/tenants']);
         } else {
           this.errorMessage = 'Access denied. Service Administrator role required.';
@@ -131,12 +131,27 @@ export class LoginComponent {
       },
       error: (err) => {
         this.isLoading = false;
-        if (err.error?.error_description) {
-          this.errorMessage = err.error.error_description;
-        } else if (err.error?.error) {
-          this.errorMessage = err.error.error;
+        // Log full error for debugging (status, URL, response body)
+        const status = err.status ?? err.statusCode;
+        const url = err.url ?? err.config?.url ?? '(unknown)';
+        const body = err.error;
+        console.error('[Login] Request failed', {
+          status,
+          statusText: err.statusText,
+          url,
+          message: err.message,
+          responseBody: body
+        });
+        if (body?.error_description) {
+          this.errorMessage = body.error_description;
+        } else if (body?.detail) {
+          this.errorMessage = body.detail;
+        } else if (body?.error) {
+          this.errorMessage = typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+        } else if (status >= 500) {
+          this.errorMessage = `Server error (${status}). Check the browser console for details.`;
         } else {
-          this.errorMessage = 'Login failed. Please check your credentials.';
+          this.errorMessage = err.message || 'Login failed. Please check your credentials.';
         }
       },
       complete: () => {
