@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TenantService } from '../../../core/services/tenant.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { RefreshTokensService } from '../../../core/services/refresh-tokens.service';
 import { Router } from '@angular/router';
 
 export interface Tenant {
@@ -34,8 +35,8 @@ export interface Tenant {
       </div>
 
       <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <div class="search-box" style="flex: 1; margin-right: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+          <div class="search-box" style="flex: 1; min-width: 200px;">
             <input
               type="text"
               [(ngModel)]="searchTerm"
@@ -43,8 +44,15 @@ export interface Tenant {
               placeholder="Search tenants by name or description..."
             />
           </div>
-          <button class="btn btn-primary" (click)="createTenant()">Create Tenant</button>
+          <div class="tenant-actions">
+            <button *ngIf="authService.isServiceAdministrator()" class="btn btn-danger" (click)="revokeAllRefreshTokens()" [disabled]="isRevokingAllTokens">
+              {{ isRevokingAllTokens ? 'Revoking...' : 'Revoke all refresh tokens' }}
+            </button>
+            <button class="btn btn-primary" (click)="createTenant()">Create Tenant</button>
+          </div>
         </div>
+        <div *ngIf="revokeAllError" class="error-message">{{ revokeAllError }}</div>
+        <div *ngIf="revokeAllSuccess" class="success-message">{{ revokeAllSuccess }}</div>
 
         <div *ngIf="isLoading" class="loading">Loading tenants...</div>
 
@@ -194,6 +202,16 @@ export interface Tenant {
       margin-top: 20px;
     }
 
+    .tenant-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tenant-actions .btn {
+      min-width: 180px;
+    }
+
     .table td button {
       margin-right: 8px;
     }
@@ -217,9 +235,13 @@ export class TenantManagementComponent implements OnInit {
   isSaving = false;
   errorMessage = '';
   successMessage = '';
+  isRevokingAllTokens = false;
+  revokeAllError = '';
+  revokeAllSuccess = '';
 
   private tenantService = inject(TenantService);
-  private authService = inject(AuthService);
+  private refreshTokensService = inject(RefreshTokensService);
+  authService = inject(AuthService);
   private router = inject(Router);
 
   ngOnInit(): void {
@@ -266,6 +288,24 @@ export class TenantManagementComponent implements OnInit {
     this.showModal = true;
     this.errorMessage = '';
     this.successMessage = '';
+  }
+
+  revokeAllRefreshTokens(): void {
+    if (!confirm('Revoke all refresh tokens for the entire service? All users across all tenants will need to log in again. Use only when the authentication service may be compromised.')) return;
+    this.revokeAllError = '';
+    this.revokeAllSuccess = '';
+    this.isRevokingAllTokens = true;
+    this.refreshTokensService.revokeAll().subscribe({
+      next: (res) => {
+        this.revokeAllSuccess = `Revoked ${res.revokedCount} refresh token(s). All users must log in again.`;
+        this.isRevokingAllTokens = false;
+      },
+      error: (err) => {
+        this.revokeAllError = err.error?.error_description || err.error?.error || 'Failed to revoke refresh tokens';
+        this.isRevokingAllTokens = false;
+        if (err.status === 401) this.authService.logout();
+      }
+    });
   }
 
   deleteTenant(tenant: Tenant): void {

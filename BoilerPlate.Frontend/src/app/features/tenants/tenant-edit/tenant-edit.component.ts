@@ -8,10 +8,11 @@ import { TenantEmailDomainsService, TenantEmailDomain } from '../../../core/serv
 import { TenantVanityUrlsService, TenantVanityUrl } from '../../../core/services/tenant-vanity-urls.service';
 import { Saml2Service, Saml2Settings, CreateOrUpdateSaml2SettingsRequest } from '../../../core/services/saml2.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { RefreshTokensService } from '../../../core/services/refresh-tokens.service';
 import { MfaSetupWizardComponent } from './mfa-setup-wizard/mfa-setup-wizard.component';
 import type { Tenant } from '../tenant-management/tenant-management.component';
 
-type TabId = 'general' | 'saml2' | 'settings' | 'mfa' | 'password-policy' | 'email-domains' | 'vanity-urls';
+type TabId = 'general' | 'saml2' | 'settings' | 'mfa' | 'password-policy' | 'email-domains' | 'vanity-urls' | 'security';
 
 @Component({
   selector: 'app-tenant-edit',
@@ -121,17 +122,29 @@ export class TenantEditComponent implements OnInit {
   private emailDomainsService = inject(TenantEmailDomainsService);
   private vanityUrlsService = inject(TenantVanityUrlsService);
   private saml2Service = inject(Saml2Service);
+  private refreshTokensService = inject(RefreshTokensService);
   authService = inject(AuthService);
 
-  tabs: { id: TabId; label: string }[] = [
+  private _tabs: { id: TabId; label: string }[] = [
     { id: 'general', label: 'General' },
     { id: 'saml2', label: 'SAML2' },
     { id: 'settings', label: 'Settings' },
     { id: 'mfa', label: 'MFA Policy' },
     { id: 'password-policy', label: 'Password Policy' },
     { id: 'email-domains', label: 'Email Domains' },
-    { id: 'vanity-urls', label: 'Vanity URLs' }
+    { id: 'vanity-urls', label: 'Vanity URLs' },
+    { id: 'security', label: 'Security' }
   ];
+
+  get displayTabs(): { id: TabId; label: string }[] {
+    if (this.authService.canRevokeRefreshTokens()) return this._tabs;
+    return this._tabs.filter(t => t.id !== 'security');
+  }
+
+  // Security (refresh token revocation)
+  securityError = '';
+  securitySuccess = '';
+  isRevokingTenantTokens = false;
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -696,6 +709,24 @@ export class TenantEditComponent implements OnInit {
 
   goBack(): void {
     this.router.navigate(['/tenants']);
+  }
+
+  revokeTenantRefreshTokens(): void {
+    if (!this.tenantId || !confirm(`Revoke all refresh tokens for tenant "${this.tenant?.name}"? All users in this tenant will need to log in again.`)) return;
+    this.securityError = '';
+    this.securitySuccess = '';
+    this.isRevokingTenantTokens = true;
+    this.refreshTokensService.revokeForTenant(this.tenantId).subscribe({
+      next: (res) => {
+        this.securitySuccess = `Revoked ${res.revokedCount} refresh token(s). All users in this tenant must log in again.`;
+        this.isRevokingTenantTokens = false;
+      },
+      error: (err) => {
+        this.securityError = err.error?.error_description || err.error?.error || 'Failed to revoke refresh tokens';
+        this.isRevokingTenantTokens = false;
+        if (err.status === 401) this.authService.logout();
+      }
+    });
   }
 
   logout(): void {

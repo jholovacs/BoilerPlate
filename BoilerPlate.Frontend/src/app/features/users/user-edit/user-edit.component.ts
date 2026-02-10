@@ -6,6 +6,7 @@ import { UserService, UserDto, UpdateUserRequest, CreateUserRequest } from '../.
 import { RoleService, RoleDto } from '../../../core/services/role.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TenantService } from '../../../core/services/tenant.service';
+import { RefreshTokensService } from '../../../core/services/refresh-tokens.service';
 
 interface TenantOption {
   id: string;
@@ -52,6 +53,9 @@ export class UserEditComponent implements OnInit {
   selectedRoleNames: string[] = [];
   rolesError = '';
   tenants: TenantOption[] = [];
+  isRevokingUserTokens = false;
+  revokeTokensError = '';
+  revokeTokensSuccess = '';
   isServiceAdmin = false;
   /** Tenant ID from route (for back link and create form). */
   tenantIdFromRoute: string | null = null;
@@ -65,6 +69,7 @@ export class UserEditComponent implements OnInit {
   private roleService = inject(RoleService);
   authService = inject(AuthService);
   private tenantService = inject(TenantService);
+  private refreshTokensService = inject(RefreshTokensService);
 
   usersListUrl(): string[] {
     return this.tenantIdFromRoute ? ['/tenants', this.tenantIdFromRoute, 'users'] : ['/account'];
@@ -289,6 +294,24 @@ export class UserEditComponent implements OnInit {
     this.userService.deactivate(this.userId).subscribe({
       next: () => this.loadUser(),
       error: (err) => (this.saveError = err.error?.error || 'Failed to deactivate')
+    });
+  }
+
+  revokeUserRefreshTokens(): void {
+    if (!this.userId || !confirm(`Revoke all refresh tokens for user "${this.user?.userName}"? They will need to log in again.`)) return;
+    this.revokeTokensError = '';
+    this.revokeTokensSuccess = '';
+    this.isRevokingUserTokens = true;
+    this.refreshTokensService.revokeForUser(this.userId).subscribe({
+      next: (res) => {
+        this.revokeTokensSuccess = `Revoked ${res.revokedCount} refresh token(s). User must log in again.`;
+        this.isRevokingUserTokens = false;
+      },
+      error: (err) => {
+        this.revokeTokensError = err.error?.error_description || err.error?.error || 'Failed to revoke refresh tokens';
+        this.isRevokingUserTokens = false;
+        if (err.status === 401) this.authService.logout();
+      }
     });
   }
 

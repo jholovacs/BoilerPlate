@@ -345,4 +345,87 @@ public class RefreshTokenServiceTests : IDisposable
     }
 
     #endregion
+
+    #region RevokeAllRefreshTokensAsync Tests
+
+    [Fact]
+    public async Task RevokeAllRefreshTokensAsync_WithMultipleTokens_ShouldRevokeAll()
+    {
+        // Arrange - tokens across multiple tenants/users
+        var tenant1 = Guid.NewGuid();
+        var tenant2 = Guid.NewGuid();
+        var user1 = Guid.NewGuid();
+        var user2 = Guid.NewGuid();
+
+        await _service.CreateRefreshTokenAsync(user1, tenant1, "token1");
+        await _service.CreateRefreshTokenAsync(user1, tenant1, "token2");
+        await _service.CreateRefreshTokenAsync(user2, tenant2, "token3");
+
+        // Act
+        var result = await _service.RevokeAllRefreshTokensAsync();
+
+        // Assert
+        result.Should().Be(3);
+
+        var allTokens = await _context.RefreshTokens.ToListAsync();
+        allTokens.Should().HaveCount(3);
+        allTokens.Should().OnlyContain(t => t.IsRevoked);
+    }
+
+    [Fact]
+    public async Task RevokeAllRefreshTokensAsync_WithNoTokens_ShouldReturnZero()
+    {
+        // Act
+        var result = await _service.RevokeAllRefreshTokensAsync();
+
+        // Assert
+        result.Should().Be(0);
+    }
+
+    #endregion
+
+    #region RevokeAllTenantRefreshTokensAsync Tests
+
+    [Fact]
+    public async Task RevokeAllTenantRefreshTokensAsync_WithMultipleTokens_ShouldRevokeTenantTokensOnly()
+    {
+        // Arrange
+        var tenant1 = Guid.NewGuid();
+        var tenant2 = Guid.NewGuid();
+        var user1 = Guid.NewGuid();
+        var user2 = Guid.NewGuid();
+
+        await _service.CreateRefreshTokenAsync(user1, tenant1, "token1");
+        await _service.CreateRefreshTokenAsync(user1, tenant1, "token2");
+        await _service.CreateRefreshTokenAsync(user2, tenant2, "token3");
+
+        // Act
+        var result = await _service.RevokeAllTenantRefreshTokensAsync(tenant1);
+
+        // Assert
+        result.Should().Be(2);
+
+        var tenant1Tokens = await _context.RefreshTokens.Where(rt => rt.TenantId == tenant1).ToListAsync();
+        tenant1Tokens.Should().HaveCount(2);
+        tenant1Tokens.Should().OnlyContain(t => t.IsRevoked);
+
+        var tenant2Token = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.TenantId == tenant2);
+        tenant2Token.Should().NotBeNull();
+        tenant2Token!.IsRevoked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RevokeAllTenantRefreshTokensAsync_WithNoTokens_ShouldReturnZero()
+    {
+        // Arrange
+        var tenantId = Guid.NewGuid();
+
+        // Act
+        var result = await _service.RevokeAllTenantRefreshTokensAsync(tenantId);
+
+        // Assert
+        result.Should().Be(0);
+    }
+
+    #endregion
 }

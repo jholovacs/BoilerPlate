@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -86,6 +87,9 @@ public class OAuthControllerTests
             _context,
             oauthClientLogger.Object);
 
+        var hostEnvMock = new Mock<IHostEnvironment>();
+        hostEnvMock.Setup(x => x.EnvironmentName).Returns("Testing");
+
         _controller = new OAuthController(
             _authenticationServiceMock.Object,
             _userServiceMock.Object,
@@ -96,7 +100,8 @@ public class OAuthControllerTests
             _oauthClientService,
             _context,
             Options.Create(_jwtSettings),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            hostEnvMock.Object);
     }
 
     #region Authorize Endpoint Tests
@@ -586,10 +591,9 @@ public class OAuthControllerTests
     }
 
     /// <summary>
-    ///     Test case: Refresh endpoint should return Unauthorized as refresh token validation is not yet implemented.
-    ///     Scenario: An OAuthRefreshTokenRequest is submitted with a valid grant type and refresh token. Since refresh token
-    ///     validation requires database storage and is not yet implemented, the controller returns an UnauthorizedObjectResult
-    ///     with an error indicating that refresh token validation is not yet available.
+    ///     Test case: Refresh endpoint should return Unauthorized when the refresh token is not found or invalid.
+    ///     Scenario: An OAuthRefreshTokenRequest is submitted with a valid grant type and refresh token that is not in the
+    ///     database. The controller should return an UnauthorizedObjectResult.
     /// </summary>
     [Fact]
     public async Task Refresh_WithValidRequest_ShouldReturnUnauthorized()
@@ -605,7 +609,56 @@ public class OAuthControllerTests
         var result = await _controller.Refresh(request, CancellationToken.None);
 
         // Assert
-        // Currently returns Unauthorized as refresh token validation is not yet implemented
+        result.Should().BeOfType<UnauthorizedObjectResult>();
+    }
+
+    /// <summary>
+    ///     Test case: Refresh endpoint should return Unauthorized when a revoked refresh token is used.
+    ///     Scenario: A refresh token is created, then revoked. When the same token is used to request a new JWT, the
+    ///     controller should return Unauthorized, confirming that revoked tokens cannot be used to obtain new access tokens.
+    /// </summary>
+    [Fact]
+    public async Task Refresh_WithRevokedToken_ShouldReturnUnauthorized()
+    {
+        // Arrange - create user and tenant in context
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var tenant = new Tenant { Id = tenantId, Name = "Test Tenant" };
+        var user = new ApplicationUser
+        {
+            Id = userId,
+            TenantId = tenantId,
+            UserName = "testuser",
+            NormalizedUserName = "TESTUSER",
+            Email = "test@example.com",
+            NormalizedEmail = "TEST@EXAMPLE.COM",
+            IsActive = true
+        };
+        _context.Tenants.Add(tenant);
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        _userManagerMock
+            .Setup(x => x.FindByIdAsync(userId.ToString()))
+            .ReturnsAsync(user);
+        _userManagerMock
+            .Setup(x => x.GetRolesAsync(user))
+            .ReturnsAsync(new List<string> { "User" });
+
+        var plainToken = "test-refresh-token-to-revoke";
+        await _refreshTokenService.CreateRefreshTokenAsync(userId, tenantId, plainToken);
+        await _refreshTokenService.RevokeRefreshTokenAsync(plainToken, userId);
+
+        var request = new OAuthRefreshTokenRequest
+        {
+            GrantType = "refresh_token",
+            RefreshToken = plainToken
+        };
+
+        // Act
+        var result = await _controller.Refresh(request, CancellationToken.None);
+
+        // Assert - revoked token must not yield new JWT
         result.Should().BeOfType<UnauthorizedObjectResult>();
     }
 

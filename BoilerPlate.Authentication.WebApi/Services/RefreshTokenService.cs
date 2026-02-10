@@ -186,6 +186,62 @@ public class RefreshTokenService
     }
 
     /// <summary>
+    ///     Revokes all refresh tokens for the entire service (service administrator only).
+    ///     Use when the authentication service is compromised.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Number of tokens revoked</returns>
+    public async Task<int> RevokeAllRefreshTokensAsync(CancellationToken cancellationToken = default)
+    {
+        var refreshTokens = await _context.RefreshTokens
+            .Where(rt => !rt.IsRevoked)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        foreach (var token in refreshTokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = now;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning("Revoked all {Count} refresh tokens service-wide (security event)",
+            refreshTokens.Count);
+
+        return refreshTokens.Count;
+    }
+
+    /// <summary>
+    ///     Revokes all refresh tokens for a tenant.
+    ///     Use when a tenant is compromised or for tenant-wide sign-out.
+    /// </summary>
+    /// <param name="tenantId">Tenant ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Number of tokens revoked</returns>
+    public async Task<int> RevokeAllTenantRefreshTokensAsync(Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var refreshTokens = await _context.RefreshTokens
+            .Where(rt => rt.TenantId == tenantId && !rt.IsRevoked)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTime.UtcNow;
+        foreach (var token in refreshTokens)
+        {
+            token.IsRevoked = true;
+            token.RevokedAt = now;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Revoked {Count} refresh tokens for tenant {TenantId}",
+            refreshTokens.Count, tenantId);
+
+        return refreshTokens.Count;
+    }
+
+    /// <summary>
     ///     Revokes all refresh tokens for a user (e.g., on password change or logout)
     /// </summary>
     /// <param name="userId">User ID</param>

@@ -6,6 +6,9 @@
     </div>
     <div class="header-actions">
       <ng-container *ngIf="!isCreateMode && user">
+        <button *ngIf="authService.canRevokeRefreshTokens()" type="button" class="btn btn-secondary" (click)="revokeUserRefreshTokens()" [disabled]="isRevokingUserTokens">
+          {{ isRevokingUserTokens ? 'Revoking...' : 'Revoke refresh tokens' }}
+        </button>
         <button *ngIf="user.isActive" type="button" class="btn btn-secondary" (click)="deactivate()">Deactivate user</button>
         <button *ngIf="!user.isActive" type="button" class="btn btn-primary" (click)="activate()">Activate user</button>
         <button type="button" class="btn btn-danger" (click)="deleteUser()">Delete user</button>
@@ -92,6 +95,8 @@
         </div>
       </ng-container>
 
+      <div *ngIf="revokeTokensError" class="error-message">{{ revokeTokensError }}</div>
+      <div *ngIf="revokeTokensSuccess" class="success-message">{{ revokeTokensSuccess }}</div>
       <div *ngIf="saveError" class="error-message">{{ saveError }}</div>
       <div *ngIf="saveSuccess" class="success-message">{{ saveSuccess }}</div>
       <div class="form-actions">

@@ -150,6 +150,13 @@ export class AuthService {
     return AuthService.userCanManageRoles(user);
   }
 
+  /** True if the current user can revoke refresh tokens for a tenant or user (Service or Tenant Administrator). */
+  canRevokeRefreshTokens(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userHasServiceAdministratorRole(user) ||
+           AuthService.userHasTenantAdministratorRole(user);
+  }
+
   getCurrentUserId(): string | null {
     const user = this.currentUserSubject.value;
     return user?.id ?? null;

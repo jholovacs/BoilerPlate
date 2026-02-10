@@ -20,7 +20,7 @@
     <p *ngIf="isSystemTenant()" class="hint system-tenant-banner">The System tenant is immutable and cannot be modified.</p>
     <div class="tabs">
       <button
-        *ngFor="let tab of tabs"
+        *ngFor="let tab of displayTabs"
         type="button"
         class="tab-btn"
         [class.active]="activeTab() === tab.id"
@@ -311,6 +311,27 @@
           </tbody>
         </table>
         <div *ngIf="!emailDomainsLoading && !emailDomains.length" class="empty-state">No email domains.</div>
+      </div>
+
+      <!-- Security -->
+      <div *ngIf="activeTab() === 'security'" class="tab-panel">
+        <h2>Refresh Token Revocation</h2>
+        <p class="hint">
+          Revoke all refresh tokens for this tenant. Use when the tenant may be compromised or to force all users to sign in again.
+          Users will need to log in again to obtain new tokens.
+        </p>
+        <div *ngIf="securityError" class="error-message">{{ securityError }}</div>
+        <div *ngIf="securitySuccess" class="success-message">{{ securitySuccess }}</div>
+        <div class="form-actions">
+          <button
+            type="button"
+            class="btn btn-danger"
+            (click)="revokeTenantRefreshTokens()"
+            [disabled]="isRevokingTenantTokens"
+          >
+            {{ isRevokingTenantTokens ? 'Revoking...' : 'Revoke all refresh tokens for this tenant' }}
+          </button>
+        </div>
       </div>
 
       <!-- Vanity URLs -->

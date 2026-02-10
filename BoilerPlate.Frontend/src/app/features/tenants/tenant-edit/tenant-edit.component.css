@@ -119,6 +119,11 @@
   display: flex;
   gap: 10px;
   margin-top: 20px;
+  align-items: center;
+}
+
+.form-actions .btn {
+  min-width: 180px;
 }
 
 .add-setting {
