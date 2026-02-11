@@ -1,4 +1,4 @@
-.PHONY: help setup setup-keys setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-frontend clean verify
+.PHONY: help setup setup-keys setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-diagnostics docker-logs-frontend clean verify
 
 # Detect OS
 UNAME_S := $(shell uname -s)
@@ -119,13 +119,15 @@ help: ## Show this help message
 	@echo "  Database: $(POSTGRES_DB)"
 	@echo "  (Override with: make setup POSTGRES_PASSWORD=YourPassword)"
 
-setup: verify-prerequisites setup-keys setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
+setup: verify-prerequisites setup-keys setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-diagnostics-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
 	@echo "$(GREEN)✓ Setup complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs:$(NC)"
 	@echo "  - Frontend: http://localhost:4200"
 	@echo "  - Web API: http://localhost:8080"
 	@echo "  - Swagger UI: http://localhost:8080/swagger"
+	@echo "  - Diagnostics API: http://localhost:8082"
+	@echo "  - Diagnostics Swagger: http://localhost:8082/swagger"
 	@echo "  - RabbitMQ Management: http://localhost:15672 (admin/SecurePassword123!)"
 	@echo "  - PostgreSQL: localhost:5432"
 	@echo "  - MongoDB: localhost:27017"
@@ -436,6 +438,19 @@ build-audit-project: ## Build the audit service .NET project (dotnet build)
 		exit 1; \
 	fi
 
+build-diagnostics-project: ## Build the diagnostics API .NET project (dotnet build)
+	@echo "$(YELLOW)Building diagnostics API .NET project...$(NC)"
+	@if ! command -v dotnet > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
+		exit 1; \
+	fi
+	@if dotnet build BoilerPlate.Diagnostics.WebApi/BoilerPlate.Diagnostics.WebApi.csproj -c Release 2>&1; then \
+		echo "$(GREEN)  ✓ Diagnostics API project built successfully$(NC)"; \
+	else \
+		echo "$(RED)  ✗ Diagnostics API project build failed$(NC)"; \
+		exit 1; \
+	fi
+
 build-frontend-project: ## Build the frontend Angular project (npm install and build)
 	@echo "$(YELLOW)Building frontend Angular project...$(NC)"
 	@if ! command -v node > /dev/null 2>&1; then \
@@ -628,6 +643,24 @@ docker-up-audit: ## Start only the audit service (assumes other services are alr
 	fi
 	@echo "$(GREEN)✓ Audit service started$(NC)"
 
+docker-up-diagnostics: ## Start only the diagnostics API service (assumes other services are already running)
+	@echo "$(YELLOW)Starting diagnostics API service...$(NC)"
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		docker-compose up -d --no-deps diagnostics 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker-compose up -d diagnostics 2>&1; \
+		}; \
+	elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+		docker compose up -d --no-deps diagnostics 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker compose up -d diagnostics 2>&1; \
+		}; \
+	else \
+		echo "$(RED)  ✗ Docker Compose is not available$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)✓ Diagnostics API service started$(NC)"
+
 docker-up-frontend: ## Start only the frontend service (assumes other services are already running)
 	@echo "$(YELLOW)Starting frontend service...$(NC)"
 	@if command -v docker-compose > /dev/null 2>&1; then \
@@ -778,13 +811,81 @@ rebuild-audit-image: ## Build the audit service Docker image without ensuring se
 		exit 1; \
 	fi
 
-redeploy: build-webapi-project build-audit-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, and frontend services (leaves third-party services unchanged)
+rebuild-diagnostics-image: ## Build the diagnostics API Docker image without ensuring services (assumes services are already running)
+	@echo "$(YELLOW)Rebuilding diagnostics API Docker image (assuming services are already running)...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ Docker is not running. Please start Docker Desktop first.$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps -a --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api"; then \
+		echo "$(YELLOW)  Stopping and removing existing diagnostics API container...$(NC)"; \
+		docker-compose stop diagnostics 2>/dev/null || docker compose stop diagnostics 2>/dev/null || true; \
+		docker-compose rm -f diagnostics 2>/dev/null || docker compose rm -f diagnostics 2>/dev/null || docker rm -f boilerplate-diagnostics-api 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building diagnostics API image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
+	@if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
+		echo "$(GREEN)  ✓ Diagnostics API image built successfully$(NC)"; \
+	else \
+		BUILD_EXIT=$$?; \
+		echo "$(RED)  ✗ Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+		echo "$(YELLOW)  This likely means base images are not cached.$(NC)"; \
+		echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-diagnostics-docker: ensure-services ## Build the diagnostics API Docker image and create the container (uses cached base images, only rebuilding code changes)
+	@echo "$(YELLOW)Rebuilding diagnostics API Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(YELLOW)  ⚠ Docker is not running. Skipping image rebuild.$(NC)"; \
+		echo "$(YELLOW)  Start Docker Desktop and run 'make rebuild-diagnostics-image' to rebuild the image$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api"; then \
+		echo "$(YELLOW)  Stopping existing diagnostics API container...$(NC)"; \
+		docker-compose stop diagnostics 2>/dev/null || docker compose stop diagnostics 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building diagnostics API image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
+	@if command -v docker > /dev/null 2>&1; then \
+		if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
+			echo "$(GREEN)  ✓ Diagnostics API image built successfully (using cached base images)$(NC)"; \
+			echo "$(YELLOW)  Creating diagnostics API container (not starting it)...$(NC)"; \
+			if docker ps -a --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api"; then \
+				echo "$(GREEN)  ✓ Diagnostics API container already exists$(NC)"; \
+			else \
+				if command -v docker-compose > /dev/null 2>&1; then \
+					docker-compose create --no-build diagnostics 2>&1 || true; \
+				elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+					docker compose create --no-build diagnostics 2>&1 || true; \
+				fi; \
+			fi; \
+		else \
+			BUILD_EXIT=$$?; \
+			echo "$(RED)  ✗ Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+			echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(YELLOW)  ⚠ Docker not available. Skipping rebuild.$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-diagnostics: rebuild-diagnostics-docker ## Rebuild the diagnostics API Docker image (alias for rebuild-diagnostics-docker)
+
+redeploy: build-webapi-project build-audit-project build-diagnostics-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-diagnostics-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, diagnostics, and frontend services (leaves third-party services unchanged)
 	@echo "$(GREEN)✓ Redeploy complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs:$(NC)"
 	@echo "  - Frontend: http://localhost:4200"
 	@echo "  - Web API: http://localhost:8080"
 	@echo "  - Swagger UI: http://localhost:8080/swagger"
+	@echo "  - Diagnostics API: http://localhost:8082"
+	@echo "  - Diagnostics Swagger: http://localhost:8082/swagger"
 
 rebuild-webapi: rebuild-webapi-docker ## Rebuild the webapi Docker image (alias for rebuild-webapi-docker)
 
@@ -893,9 +994,9 @@ rebuild-frontend-docker: ## Build the frontend Docker image
 
 rebuild-frontend: rebuild-frontend-docker ## Rebuild the frontend Docker image (alias for rebuild-frontend-docker)
 
-docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-frontend-docker ## Build and start the webapi, audit, and frontend services
+docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-diagnostics-docker rebuild-frontend-docker ## Build and start the webapi, audit, diagnostics, and frontend services
 	@echo "$(YELLOW)Starting services...$(NC)"
-	@docker-compose up -d webapi audit frontend || docker compose up -d webapi audit frontend || true
+	@docker-compose up -d webapi audit diagnostics frontend || docker compose up -d webapi audit diagnostics frontend || true
 	@echo "$(GREEN)✓ Services rebuilt and started$(NC)"
 
 docker-logs: ## View logs from all services
@@ -906,6 +1007,9 @@ docker-logs-webapi: ## View logs from webapi service only
 
 docker-logs-audit: ## View logs from audit service only
 	@docker-compose logs -f audit || docker compose logs -f audit
+
+docker-logs-diagnostics: ## View logs from diagnostics API service only
+	@docker-compose logs -f diagnostics || docker compose logs -f diagnostics
 
 docker-logs-frontend: ## View logs from frontend service only
 	@docker-compose logs -f frontend || docker compose logs -f frontend
@@ -936,6 +1040,7 @@ verify: ## Verify the setup
 	@docker ps --filter "name=mongodb-logs" --format "{{.Names}}" | grep -q "mongodb-logs" && echo "$(GREEN)  ✓ MongoDB is running$(NC)" || echo "$(YELLOW)  ○ MongoDB is not running$(NC)"
 	@docker ps --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector" && echo "$(GREEN)  ✓ OTEL Collector is running$(NC)" || echo "$(YELLOW)  ○ OTEL Collector is not running$(NC)"
 	@docker ps --filter "name=boilerplate-auth-api" --format "{{.Names}}" | grep -q "boilerplate-auth-api" && echo "$(GREEN)  ✓ WebAPI is running$(NC)" || echo "$(YELLOW)  ○ WebAPI is not running$(NC)"
+	@docker ps --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api" && echo "$(GREEN)  ✓ Diagnostics API is running$(NC)" || echo "$(YELLOW)  ○ Diagnostics API is not running$(NC)"
 	@docker ps --filter "name=boilerplate-frontend" --format "{{.Names}}" | grep -q "boilerplate-frontend" && echo "$(GREEN)  ✓ Frontend is running$(NC)" || echo "$(YELLOW)  ○ Frontend is not running$(NC)"
 
 clean: ## Remove generated files (keeps JWT keys)

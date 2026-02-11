@@ -155,6 +155,29 @@ services:
       retries: 3
       start_period: 40s
 
+  diagnostics:
+    image: boilerplate-diagnostics-webapi:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: BoilerPlate.Diagnostics.WebApi/Dockerfile
+    container_name: boilerplate-diagnostics-api
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
+      - JwtSettings__Issuer=BoilerPlate.Authentication
+      - JwtSettings__Audience=BoilerPlate.API
+      - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+
   frontend:
     image: boilerplate-frontend:latest
     pull_policy: never
