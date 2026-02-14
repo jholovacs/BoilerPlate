@@ -88,11 +88,13 @@ public static class PrometheusMetricsParser
             var end = start;
             while (end < labels.Length)
             {
-                if (labels[end] == '\\') { end += 2; continue; }
+                if (labels[end] == '\\') { end = Math.Min(end + 2, labels.Length); continue; }
                 if (labels[end] == '"') break;
                 end++;
             }
-            var value = labels.Slice(start, end - start).ToString().Replace("\\n", "\n").Replace("\\\"", "\"");
+            var len = Math.Min(end - start, labels.Length - start);
+            if (len < 0) break;
+            var value = labels.Slice(start, len).ToString().Replace("\\n", "\n").Replace("\\\"", "\"");
             dict[key] = value;
             start = end + 1;
             var comma = labels.Slice(start).IndexOf(',');

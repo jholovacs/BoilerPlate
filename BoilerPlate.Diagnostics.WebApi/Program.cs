@@ -3,6 +3,9 @@ using BoilerPlate.Diagnostics.EventLogs.MongoDb.Extensions;
 using BoilerPlate.Diagnostics.Metrics.OpenTelemetry.Extensions;
 using BoilerPlate.Diagnostics.WebApi.Configuration;
 using BoilerPlate.Diagnostics.WebApi.Extensions;
+using BoilerPlate.Diagnostics.WebApi.Hubs;
+using BoilerPlate.Diagnostics.WebApi.Services;
+using BoilerPlate.ServiceBus.RabbitMq.Extensions;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OpenApi.Models;
 
@@ -15,6 +18,23 @@ builder.Services.AddDiagnosticsMetricsOpenTelemetry(builder.Configuration);
 
 // JWT validation (same tokens as Authentication WebApi) and authorization (Service Administrator = all tenants; others = tenant-scoped)
 builder.Services.AddDiagnosticsJwtAuthentication(builder.Configuration);
+
+// RabbitMQ for subscribing to EventLogPublishedEvent (real-time SignalR)
+builder.Services.AddRabbitMqServiceBus(builder.Configuration);
+builder.Services.AddHostedService<EventLogRealtimeService>();
+
+builder.Services.AddSignalR();
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyHeader()
+            .AllowAnyMethod()
+            .SetIsOriginAllowed(_ => true)
+            .AllowCredentials();
+    });
+});
 
 builder.Services.AddControllers()
     .AddOData(options => options
@@ -39,6 +59,23 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Global exception handler: always return JSON error body so client can see the actual error
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        var ex = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        var msg = ex?.Message ?? "Unknown error";
+        var type = ex?.GetType().Name ?? "Unknown";
+        var inner = ex?.InnerException?.Message;
+        var stack = app.Environment.IsDevelopment() ? ex?.StackTrace : null;
+        var json = System.Text.Json.JsonSerializer.Serialize(new { error = msg, type, inner, stack });
+        await context.Response.WriteAsync(json);
+    });
+});
+
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -46,10 +83,12 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-app.UseHttpsRedirection();
+// Skip UseHttpsRedirection: APIs run behind nginx (HTTPS) in Docker; no HTTPS port configured.
+app.UseCors();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<EventLogsHub>("/hubs/event-logs");
 
 app.Run();

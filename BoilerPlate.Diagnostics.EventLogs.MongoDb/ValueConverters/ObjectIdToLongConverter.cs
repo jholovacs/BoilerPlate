@@ -26,7 +26,12 @@ internal sealed class ObjectIdToLongConverter : ValueConverter<long, ObjectId>
         return ObjectId.Empty;
     }
 
-    private static long LongFromObjectId(ObjectId id)
+    private static long LongFromObjectId(ObjectId id) => ConvertToLong(id);
+
+    /// <summary>
+    ///     Converts ObjectId to long (for raw MongoDB queries).
+    /// </summary>
+    internal static long ConvertToLong(ObjectId id)
     {
         var bytes = id.ToByteArray();
         if (bytes.Length < 8) return 0;

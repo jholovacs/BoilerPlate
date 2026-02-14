@@ -5,6 +5,8 @@
 
 # security files
 jwt-keys/
+tls-certs/
+!tls-certs/openssl.cnf
 *.pem
 *.pub
 *.key
@@ -372,3 +374,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+.env

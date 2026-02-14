@@ -1,14 +1,6 @@
 <div class="container">
   <div class="header">
-    <div class="header-left">
-      <h1>Your account</h1>
-      <nav class="nav-links">
-        <a routerLink="/account" class="nav-link active">Account</a>
-        <a routerLink="/account/change-password" class="nav-link">Change password</a>
-        <a routerLink="/my-tenant/settings" class="nav-link" *ngIf="authService.canManageUsers() || authService.canManageRoles()">My tenant</a>
-        <a routerLink="/tenants" class="nav-link" *ngIf="authService.isServiceAdministrator()">Tenants</a>
-      </nav>
-    </div>
+    <h1>Your account</h1>
     <button class="btn btn-secondary" (click)="authService.logout()">Logout</button>
   </div>
 

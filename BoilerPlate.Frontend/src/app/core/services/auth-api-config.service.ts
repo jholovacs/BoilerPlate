@@ -8,6 +8,8 @@ const DEFAULT_DEV_AUTH_BASE = 'http://localhost:8080';
 
 export interface AuthApiConfig {
   authApiBaseUrl: string;
+  /** Base URL for diagnostics API (event logs, audit logs, metrics). Empty = use relative /diagnostics (nginx proxy). */
+  diagnosticsApiBaseUrl?: string;
 }
 
 /**
@@ -20,6 +22,7 @@ export interface AuthApiConfig {
 })
 export class AuthApiConfigService {
   private baseUrl: string = '';
+  private diagnosticsBaseUrl: string = '';
 
   /**
    * Load config from auth-api.config.json. Called by APP_INITIALIZER before the app starts.
@@ -30,14 +33,24 @@ export class AuthApiConfigService {
       const res = await fetch(CONFIG_PATH);
       if (!res.ok) {
         this.baseUrl = this.getFallbackBaseUrl();
+        this.diagnosticsBaseUrl = '/diagnostics';
         return;
       }
       const config: AuthApiConfig = await res.json();
       const configured = (config.authApiBaseUrl ?? '').trim().replace(/\/$/, '');
-      this.baseUrl = configured || this.getFallbackBaseUrl();
+      // Use configured value as-is; empty string means same-origin. Fallback only when config fails to load.
+      this.baseUrl = configured;
+      const diagConfigured = (config.diagnosticsApiBaseUrl ?? '').trim().replace(/\/$/, '');
+      this.diagnosticsBaseUrl = diagConfigured || '/diagnostics';
     } catch {
       this.baseUrl = this.getFallbackBaseUrl();
+      this.diagnosticsBaseUrl = '/diagnostics';
     }
+  }
+
+  /** Get the diagnostics API base URL for OData requests (event logs, audit logs, metrics). */
+  getDiagnosticsBaseUrl(): string {
+    return this.diagnosticsBaseUrl || '/diagnostics';
   }
 
   private getFallbackBaseUrl(): string {

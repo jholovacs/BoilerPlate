@@ -1,3 +1,4 @@
 {
-  "authApiBaseUrl": "http://localhost:8080"
+  "authApiBaseUrl": "http://localhost:8080",
+  "diagnosticsApiBaseUrl": ""
 }

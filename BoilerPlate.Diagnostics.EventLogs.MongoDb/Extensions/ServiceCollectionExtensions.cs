@@ -1,9 +1,7 @@
 using BoilerPlate.Diagnostics.Database;
-using Microsoft.EntityFrameworkCore;
+using BoilerPlate.Diagnostics.EventLogs.MongoDb.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MongoDB.Driver;
-using MongoDB.EntityFrameworkCore.Extensions;
 
 namespace BoilerPlate.Diagnostics.EventLogs.MongoDb.Extensions;
 
@@ -39,22 +37,16 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     ///     Adds <see cref="BaseEventLogDbContext" /> implemented by MongoDB (logs collection).
+    ///     Uses the official AddMongoDB extension for proper EF Core provider registration.
     /// </summary>
     public static IServiceCollection AddDiagnosticsEventLogsMongoDb(
         this IServiceCollection services,
         string connectionString,
         string databaseName)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<BaseEventLogDbContext>()
-            .UseMongoDB(connectionString, databaseName);
-
-        services.AddSingleton(optionsBuilder.Options);
-        services.AddScoped<BaseEventLogDbContext>(sp =>
-        {
-            var options = sp.GetRequiredService<DbContextOptions<BaseEventLogDbContext>>();
-            return new EventLogsMongoDbContext(options);
-        });
-
+        services.AddMongoDB<EventLogsMongoDbContext>(connectionString, databaseName);
+        services.AddScoped<BaseEventLogDbContext>(sp => sp.GetRequiredService<EventLogsMongoDbContext>());
+        services.AddScoped<IEventLogsRawQueryService, EventLogsRawQueryService>();
         return services;
     }
 

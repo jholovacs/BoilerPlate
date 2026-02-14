@@ -1,0 +1,121 @@
+<div class="container">
+  <div class="header">
+    <h1>Event Logs</h1>
+    <button class="btn btn-secondary" (click)="logout()">Logout</button>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="mode-toggle">
+        <button
+          type="button"
+          class="btn"
+          [class.btn-primary]="displayMode === 'realtime'"
+          [class.btn-secondary]="displayMode !== 'realtime'"
+          (click)="setDisplayMode('realtime')"
+        >
+          Real-time
+        </button>
+        <button
+          type="button"
+          class="btn"
+          [class.btn-primary]="displayMode === 'database'"
+          [class.btn-secondary]="displayMode !== 'database'"
+          (click)="setDisplayMode('database')"
+        >
+          Database
+        </button>
+      </div>
+      <div class="toolbar-left">
+        <input
+          type="text"
+          [(ngModel)]="searchTerm"
+          (keyup.enter)="search()"
+          placeholder="Search in message..."
+          class="search-input"
+        />
+        <select [(ngModel)]="levelFilter" (change)="displayMode === 'database' && search()" class="level-select">
+          <option *ngFor="let l of levels" [value]="l">{{ l || 'All levels' }}</option>
+        </select>
+        <button class="btn btn-primary" (click)="search()">Search</button>
+        <button class="btn btn-secondary" (click)="clearSearch()">Clear</button>
+      </div>
+    </div>
+
+    <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+
+    <div *ngIf="displayMode === 'database' && isLoading" class="loading">Loading event logs...</div>
+
+    <div *ngIf="(displayMode === 'database' && !isLoading) || displayMode === 'realtime'">
+      <div *ngIf="filteredLogs.length === 0" class="empty-state">
+        {{ searchTerm || levelFilter ? 'No logs match your filters.' : 'No event logs found.' }}
+      </div>
+
+      <div *ngIf="filteredLogs.length > 0">
+        <div class="pagination-info">{{ pageInfo }}</div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Level</th>
+              <th>Source</th>
+              <th>Message</th>
+              <th>Exception</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let log of filteredLogs">
+              <td class="col-timestamp">{{ formatTimestamp(getLogValue(log, 'timestamp')) }}</td>
+              <td><span [class]="levelClass(getLogValue(log, 'level'))">{{ getLogValue(log, 'level') || '-' }}</span></td>
+              <td class="col-source">
+                <span
+                  class="truncate-cell"
+                  [title]="getLogValue(log, 'source') || ''"
+                  (click)="openModal(getLogValue(log, 'source') || '', 'Source')"
+                >{{ getLogValue(log, 'source') || '-' }}</span>
+              </td>
+              <td class="col-message">
+                <span
+                  class="truncate-cell"
+                  [title]="getLogValue(log, 'message') || ''"
+                  (click)="openModal(getLogValue(log, 'message') || '', 'Message')"
+                >{{ getLogValue(log, 'message') || '-' }}</span>
+              </td>
+              <td class="col-exception">
+                <span
+                  class="truncate-cell"
+                  [title]="getLogValue(log, 'exception') || ''"
+                  (click)="openModal(getLogValue(log, 'exception') || '', 'Exception')"
+                >{{ getLogValue(log, 'exception') || '-' }}</span>
+              </td>
+            </tr>
+          </tbody>
+      </table>
+        <div *ngIf="displayMode === 'database'" class="pagination">
+          <button class="btn btn-secondary" [disabled]="!hasPrevPage" (click)="prevPage()">Previous</button>
+          <span class="pagination-text">{{ pageInfo }}</span>
+          <button class="btn btn-secondary" [disabled]="!hasNextPage" (click)="nextPage()">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for full text view with copy -->
+<div *ngIf="modalVisible" class="modal-overlay" (click)="closeModal()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>{{ modalTitle }}</h3>
+      <button type="button" class="modal-close" (click)="closeModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <pre class="modal-content">{{ modalContent }}</pre>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" (click)="copyToClipboard()">
+        {{ copyFeedback ? 'Copied!' : 'Copy to clipboard' }}
+      </button>
+      <button type="button" class="btn btn-secondary" (click)="closeModal()">Close</button>
+    </div>
+  </div>
+</div>

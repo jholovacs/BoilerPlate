@@ -20,6 +20,9 @@ export class MyTenantSettingsComponent implements OnInit {
     const tenantId = this.authService.getCurrentTenantId();
     if (tenantId) {
       this.router.navigate(['/tenants', tenantId, 'edit'], { replaceUrl: true });
+    } else if (this.authService.isServiceAdministrator()) {
+      // Service Admins may not have a tenant (e.g. system-level). Go to tenant list.
+      this.router.navigate(['/tenants'], { replaceUrl: true });
     } else {
       this.router.navigate(['/account'], { replaceUrl: true });
     }

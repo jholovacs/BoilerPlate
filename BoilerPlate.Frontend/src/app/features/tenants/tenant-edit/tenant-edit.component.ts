@@ -194,7 +194,12 @@ export class TenantEditComponent implements OnInit {
       error: (err) => {
         this.isLoading = false;
         if (err.status === 401) this.authService.logout();
-        else this.errorMessage = err.error?.error || 'Failed to load tenant';
+        else if (err.status === 404 && this.authService.isServiceAdministrator()) {
+          // Tenant not found (e.g. invalid tenant_id in token). Redirect Service Admins to tenant list.
+          this.router.navigate(['/tenants']);
+        } else {
+          this.errorMessage = err.error?.error || 'Failed to load tenant';
+        }
       }
     });
   }

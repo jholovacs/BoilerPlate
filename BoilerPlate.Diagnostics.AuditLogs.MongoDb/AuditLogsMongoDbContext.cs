@@ -1,6 +1,5 @@
 using BoilerPlate.Diagnostics.Database;
 using BoilerPlate.Diagnostics.Database.Entities;
-using BoilerPlate.Diagnostics.AuditLogs.MongoDb.ValueConverters;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.EntityFrameworkCore.Extensions;
 
@@ -36,14 +35,13 @@ public sealed class AuditLogsMongoDbContext : BaseAuditLogDbContext
             entity.Property(e => e.TenantId).HasElementName("tenantId");
             entity.Property(e => e.UserName).HasElementName("userName");
             entity.Property(e => e.Email).HasElementName("email");
-            entity.Property(e => e.EventData).HasElementName("eventData")
-                .HasConversion(BsonDocumentToStringConverter.Default);
+            // EventData and Metadata are BsonDocument in MongoDB; EF provider does not support them.
+            entity.Ignore(e => e.EventData);
+            entity.Ignore(e => e.Metadata);
             entity.Property(e => e.TraceId).HasElementName("traceId");
             entity.Property(e => e.ReferenceId).HasElementName("referenceId");
             entity.Property(e => e.EventTimestamp).HasElementName("eventTimestamp");
             entity.Property(e => e.CreatedAt).HasElementName("createdAt");
-            entity.Property(e => e.Metadata).HasElementName("metadata")
-                .HasConversion(BsonDocumentToStringConverter.Default);
         });
     }
 }

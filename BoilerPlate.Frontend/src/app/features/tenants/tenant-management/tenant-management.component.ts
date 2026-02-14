@@ -23,14 +23,7 @@ export interface Tenant {
   template: `
     <div class="container">
       <div class="header">
-        <div class="header-left">
-          <h1>Tenant Management</h1>
-          <nav class="nav-links">
-            <a routerLink="/account" class="nav-link">Account</a>
-            <a routerLink="/account/change-password" class="nav-link">Change password</a>
-            <a routerLink="/tenants" class="nav-link active">Tenants</a>
-          </nav>
-        </div>
+        <h1>Tenant Management</h1>
         <button class="btn btn-secondary" (click)="logout()">Logout</button>
       </div>
 
@@ -157,35 +150,9 @@ export interface Tenant {
       gap: 16px;
     }
 
-    .header-left {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
     .header h1 {
       color: #333;
       margin: 0;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .nav-links a {
-      color: #667eea;
-      text-decoration: none;
-      font-size: 14px;
-    }
-
-    .nav-links a:hover {
-      text-decoration: underline;
-    }
-
-    .nav-links a.active {
-      font-weight: 600;
     }
 
     .status-active {

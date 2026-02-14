@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './features/auth/login/login.component';
+import { AuditLogsComponent } from './features/diagnostics/audit-logs/audit-logs.component';
+import { EventLogsComponent } from './features/diagnostics/event-logs/event-logs.component';
 import { TenantManagementComponent } from './features/tenants/tenant-management/tenant-management.component';
 import { TenantEditComponent } from './features/tenants/tenant-edit/tenant-edit.component';
 import { MyTenantSettingsComponent } from './features/tenants/my-tenant-settings/my-tenant-settings.component';
@@ -15,6 +17,7 @@ import { tenantUsersGuard } from './core/guards/tenant-users.guard';
 import { tenantRolesGuard } from './core/guards/tenant-roles.guard';
 import { authenticatedGuard } from './core/guards/authenticated.guard';
 import { myTenantSettingsGuard } from './core/guards/my-tenant-settings.guard';
+import { diagnosticsGuard } from './core/guards/diagnostics.guard';
 
 export const routes: Routes = [
   {
@@ -65,6 +68,16 @@ export const routes: Routes = [
     path: 'my-tenant/settings',
     component: MyTenantSettingsComponent,
     canActivate: [myTenantSettingsGuard]
+  },
+  {
+    path: 'event-logs',
+    component: EventLogsComponent,
+    canActivate: [diagnosticsGuard]
+  },
+  {
+    path: 'audit-logs',
+    component: AuditLogsComponent,
+    canActivate: [diagnosticsGuard]
   },
   {
     path: 'account',

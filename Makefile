@@ -1,9 +1,31 @@
-.PHONY: help setup setup-keys setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-diagnostics docker-logs-frontend clean verify
+.PHONY: help setup setup-keys setup-tls-certs setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-event-logs-image rebuild-event-logs-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-event-logs rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-event-logs docker-logs-diagnostics docker-logs-frontend clean verify
 
-# Detect OS
-UNAME_S := $(shell uname -s)
+# Project root (avoids getcwd failures in WSL when cwd becomes invalid)
+# Allow override: make setup PROJECT_ROOT=/mnt/d/Code/BoilerPlate
+_PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+ifeq ($(strip $(_PROJECT_ROOT)),)
+_PROJECT_ROOT := $(CURDIR)
+endif
+ifeq ($(strip $(_PROJECT_ROOT)),)
+_PROJECT_ROOT := .
+endif
+# When getcwd fails, make may return "(unreachable)/path" - try to find a valid path
+ifneq (,$(findstring (unreachable),$(_PROJECT_ROOT)))
+_PROJECT_ROOT := $(shell for p in /mnt/d/Code/BoilerPlate /mnt/c/Code/BoilerPlate "$$HOME/Code/BoilerPlate" .; do [ -f "$$p/Makefile" ] 2>/dev/null && echo "$$p" && break; done)
+endif
+PROJECT_ROOT ?= $(_PROJECT_ROOT)
+ifeq ($(strip $(PROJECT_ROOT)),)
+PROJECT_ROOT := .
+endif
+
+# Detect OS (uname not on native Windows cmd - use .\redeploy.ps1 instead)
+UNAME_S := $(shell uname -s 2>nul || echo Windows_NT)
 OS := Unknown
 
+ifeq ($(UNAME_S),Windows_NT)
+	OS := Windows
+	SHELL := /bin/bash
+endif
 ifeq ($(UNAME_S),Linux)
 	OS := Linux
 	SHELL := /bin/bash
@@ -111,6 +133,11 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)Detected OS:$(NC) $(OS)"
+	@if [ "$(OS)" = "Windows" ]; then \
+		echo ""; \
+		echo "$(YELLOW)On Windows:$(NC) Use .\redeploy.ps1 instead of make redeploy"; \
+		echo "  (Makefile requires bash from WSL or Git Bash)"; \
+	fi
 	@echo ""
 	@echo "$(YELLOW)PostgreSQL Configuration:$(NC)"
 	@echo "  Host: $(POSTGRES_HOST)"
@@ -119,35 +146,27 @@ help: ## Show this help message
 	@echo "  Database: $(POSTGRES_DB)"
 	@echo "  (Override with: make setup POSTGRES_PASSWORD=YourPassword)"
 
-setup: verify-prerequisites setup-keys setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-diagnostics-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
+setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
 	@echo "$(GREEN)✓ Setup complete!$(NC)"
 	@echo ""
-	@echo "$(YELLOW)Service URLs:$(NC)"
-	@echo "  - Frontend: http://localhost:4200"
-	@echo "  - Web API: http://localhost:8080"
-	@echo "  - Swagger UI: http://localhost:8080/swagger"
-	@echo "  - Diagnostics API: http://localhost:8082"
-	@echo "  - Diagnostics Swagger: http://localhost:8082/swagger"
-	@echo "  - RabbitMQ Management: http://localhost:15672 (admin/SecurePassword123!)"
-	@echo "  - PostgreSQL: localhost:5432"
-	@echo "  - MongoDB: localhost:27017"
-	@echo "  - OTEL Collector:"
-	@echo "    - OTLP gRPC: localhost:4317"
-	@echo "    - OTLP HTTP: localhost:4318"
-	@echo "    - Prometheus Metrics: http://localhost:8888/metrics"
+	@echo "$(YELLOW)Service URLs (HTTPS on port 4200 - accept self-signed cert in browser):$(NC)"
+	@echo "  - Frontend: https://localhost:4200"
+	@echo "  - Auth API / Swagger: https://localhost:4200/swagger (proxied from webapi)"
+	@echo "  - Diagnostics API / Swagger: https://localhost:4200/diagnostics/swagger"
+	@echo "  - RabbitMQ Management: https://localhost:4200/amqp/ (OAuth2 - Service Administrator only)"
 	@echo ""
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Review the .env file (it contains base64-encoded JWT keys)"
-	@echo "  2. Access Swagger UI at http://localhost:8080/swagger"
+	@echo "  2. Access the app at https://localhost:4200 (accept the self-signed cert when prompted)"
 	@echo "  3. All services are now running and ready to use!"
 
 verify-prerequisites: ## Verify required tools are installed
-	@echo "$(YELLOW)Verifying prerequisites...$(NC)"
-	@which openssl > /dev/null 2>&1 || (echo "$(RED)✗ OpenSSL is not installed. Please install it first.$(NC)" && exit 1)
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Verifying prerequisites...$(NC)"
+	@cd "$(PROJECT_ROOT)" && which openssl > /dev/null 2>&1 || (echo "$(RED)✗ OpenSSL is not installed. Please install it first.$(NC)" && exit 1)
 	@which docker > /dev/null 2>&1 || (echo "$(RED)✗ Docker is not installed. Please install Docker Desktop first.$(NC)" && exit 1)
 	@which docker-compose > /dev/null 2>&1 || which docker compose > /dev/null 2>&1 || (echo "$(RED)✗ Docker Compose is not installed. Please install it first.$(NC)" && exit 1)
 	@which dotnet > /dev/null 2>&1 || (echo "$(RED)✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)" && exit 1)
-	@if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
 		echo "$(YELLOW)  Installing dotnet-ef tool...$(NC)"; \
 		if dotnet tool install --global dotnet-ef --version 8.0.0 2>&1; then \
 			echo "$(GREEN)  ✓ dotnet-ef tool installed$(NC)"; \
@@ -158,7 +177,7 @@ verify-prerequisites: ## Verify required tools are installed
 			echo "$(YELLOW)  Migrations will be skipped. Run 'make migrate' manually after installing dotnet-ef$(NC)"; \
 		fi; \
 	fi
-	@if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
 		echo "$(YELLOW)  ⚠ dotnet-ef tool is not available. Migrations will be skipped.$(NC)"; \
 		echo "$(YELLOW)  Install with: dotnet tool install --global dotnet-ef --version 8.0.0$(NC)"; \
 		echo "$(YELLOW)  Then add to PATH: export PATH=\"$$HOME/.dotnet/tools:$$PATH\"$(NC)"; \
@@ -168,16 +187,16 @@ verify-prerequisites: ## Verify required tools are installed
 	@echo "$(GREEN)✓ All prerequisites are installed$(NC)"
 
 setup-keys: ## Generate JWT keys if they don't exist
-	@echo "$(YELLOW)Setting up JWT keys...$(NC)"
-	@mkdir -p jwt-keys
-	@if [ ! -f jwt-keys/private_key.pem ]; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Setting up JWT keys...$(NC)"
+	@cd "$(PROJECT_ROOT)" && mkdir -p jwt-keys
+	@cd "$(PROJECT_ROOT)" && if [ ! -f jwt-keys/private_key.pem ]; then \
 		echo "$(YELLOW)  Generating private key...$(NC)"; \
 		openssl genrsa -out jwt-keys/private_key.pem 2048; \
 		echo "$(GREEN)  ✓ Private key generated$(NC)"; \
 	else \
 		echo "$(GREEN)  ✓ Private key already exists$(NC)"; \
 	fi
-	@if [ ! -f jwt-keys/public_key.pem ]; then \
+	@cd "$(PROJECT_ROOT)" && if [ ! -f jwt-keys/public_key.pem ]; then \
 		echo "$(YELLOW)  Generating public key...$(NC)"; \
 		openssl rsa -in jwt-keys/private_key.pem -pubout -out jwt-keys/public_key.pem; \
 		echo "$(GREEN)  ✓ Public key generated$(NC)"; \
@@ -185,17 +204,39 @@ setup-keys: ## Generate JWT keys if they don't exist
 		echo "$(GREEN)  ✓ Public key already exists$(NC)"; \
 	fi
 
+setup-tls-certs: ## Generate self-signed TLS cert for development (HTTPS for OAuth2/RabbitMQ)
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Setting up TLS certificates for development...$(NC)"
+	@cd "$(PROJECT_ROOT)" && mkdir -p tls-certs
+	@cd "$(PROJECT_ROOT)" && if [ ! -f tls-certs/ca.pem ]; then \
+		echo "$(YELLOW)  Generating CA and server certificate...$(NC)"; \
+		openssl genrsa -out tls-certs/ca-key.pem 2048 2>/dev/null; \
+		openssl req -x509 -new -nodes -key tls-certs/ca-key.pem -sha256 -days 365 -out tls-certs/ca.pem -subj "/CN=BoilerPlate Dev CA" 2>/dev/null; \
+		openssl genrsa -out tls-certs/key.pem 2048 2>/dev/null; \
+		openssl req -new -key tls-certs/key.pem -out tls-certs/cert.csr -subj "/CN=localhost" -config tls-certs/openssl.cnf 2>/dev/null; \
+		openssl x509 -req -in tls-certs/cert.csr -CA tls-certs/ca.pem -CAkey tls-certs/ca-key.pem -CAcreateserial -out tls-certs/cert.pem -days 365 -sha256 -extensions v3_req -extfile tls-certs/openssl.cnf 2>/dev/null; \
+		rm -f tls-certs/cert.csr tls-certs/ca-key.pem tls-certs/ca.srl 2>/dev/null; \
+		echo "$(GREEN)  ✓ TLS certificates generated (replace with trusted cert in production)$(NC)"; \
+	else \
+		echo "$(GREEN)  ✓ TLS certificates already exist$(NC)"; \
+	fi
+
+regen-tls-certs: ## Regenerate TLS certs (e.g. after adding SAN for frontend for RabbitMQ OAuth2)
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Regenerating TLS certificates...$(NC)"
+	@cd "$(PROJECT_ROOT)" && rm -f tls-certs/ca.pem tls-certs/cert.pem tls-certs/key.pem tls-certs/ca-key.pem tls-certs/cert.csr tls-certs/ca.srl 2>/dev/null || true
+	@cd "$(PROJECT_ROOT)" && "$(MAKE)" setup-tls-certs
+	@echo "$(YELLOW)  Restart frontend and RabbitMQ: docker compose restart frontend rabbitmq$(NC)"
+
 setup-volumes: ## Create or reset Docker volumes for PostgreSQL, MongoDB, RabbitMQ, and OTEL Collector
-	@echo "$(YELLOW)Setting up Docker volumes...$(NC)"
-	@if ! docker info > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Setting up Docker volumes...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if ! docker info > /dev/null 2>&1; then \
 		echo "$(YELLOW)  ⚠ Docker is not running. Skipping volume setup.$(NC)"; \
 		echo "$(YELLOW)  Start Docker Desktop and volumes will be created automatically when services start$(NC)"; \
 		exit 0; \
 	fi
-	@echo "$(YELLOW)  Stopping and removing containers that use these volumes...$(NC)"
-	@docker stop postgres-auth mongodb-logs rabbitmq-auth otel-collector 2>/dev/null || true
-	@docker rm -f postgres-auth mongodb-logs rabbitmq-auth otel-collector 2>/dev/null || true
-	@if command -v docker-compose > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)  Stopping and removing containers that use these volumes...$(NC)"
+	@cd "$(PROJECT_ROOT)" && docker stop postgres-auth mongodb-logs rabbitmq-auth otel-collector 2>/dev/null || true
+	@cd "$(PROJECT_ROOT)" && docker rm -f postgres-auth mongodb-logs rabbitmq-auth otel-collector 2>/dev/null || true
+	@cd "$(PROJECT_ROOT)" && if command -v docker-compose > /dev/null 2>&1; then \
 		docker-compose stop postgres mongodb rabbitmq otel-collector 2>/dev/null || true; \
 		docker-compose rm -f postgres mongodb rabbitmq otel-collector 2>/dev/null || true; \
 		echo "$(YELLOW)  Using docker-compose to remove volumes...$(NC)"; \
@@ -326,6 +367,11 @@ setup-env: setup-keys ## Create .env file with base64-encoded JWT keys
 		echo "JWT_PUBLIC_KEY=$$(cat jwt-keys/public_key_base64.txt | tr -d '\r')" >> .env; \
 		echo "JWT_EXPIRATION_MINUTES=60" >> .env; \
 		echo "" >> .env; \
+		echo "# JWT Issuer URL for microservices that validate tokens (e.g. Diagnostics)." >> .env; \
+		echo "# Used to fetch public key from /.well-known/jwks.json when JWT_PUBLIC_KEY is not set." >> .env; \
+		echo "# Docker default: http://webapi:8080 | Local: http://localhost:8080" >> .env; \
+		echo "# JWT_ISSUER_URL=http://webapi:8080" >> .env; \
+		echo "" >> .env; \
 		echo "# Database Connection Strings" >> .env; \
 		echo "ConnectionStrings__PostgreSqlConnection=Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" >> .env; \
 		echo "" >> .env; \
@@ -341,6 +387,9 @@ setup-env: setup-keys ## Create .env file with base64-encoded JWT keys
 		echo "# Admin User Configuration" >> .env; \
 		echo "ADMIN_USERNAME=admin" >> .env; \
 		echo "ADMIN_PASSWORD=AdminPassword123!" >> .env; \
+		echo "" >> .env; \
+		echo "# OAuth2 Issuer URL (HTTPS - self-signed in dev; trusted cert in production)" >> .env; \
+		echo "OAUTH2_ISSUER_URL=https://host.docker.internal:4200" >> .env; \
 		echo "$(GREEN)  ✓ .env file created with all connection strings$(NC)"; \
 	else \
 		echo "$(RED)  ✗ Failed to create base64 encoded keys$(NC)"; \
@@ -348,16 +397,16 @@ setup-env: setup-keys ## Create .env file with base64-encoded JWT keys
 	fi
 
 ensure-services: ## Ensure all required services are running (PostgreSQL, RabbitMQ, MongoDB, OTEL Collector, but NOT webapi)
-	@echo "$(YELLOW)Ensuring required services are running...$(NC)"
-	@if ! docker info > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Ensuring required services are running...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if ! docker info > /dev/null 2>&1; then \
 		echo "$(YELLOW)  ⚠ Docker is not running. Please start Docker Desktop first.$(NC)"; \
 		exit 1; \
 	fi
 	@# Ensure PostgreSQL is running
-	@$(MAKE) ensure-postgres
+	@cd "$(or $(strip $(PROJECT_ROOT)),.)" && "$(MAKE)" ensure-postgres
 	@# Ensure RabbitMQ is running
-	@echo "$(YELLOW)Ensuring RabbitMQ is running...$(NC)"
-	@if docker ps --filter "name=rabbitmq-auth" --format "{{.Names}}" | grep -q "rabbitmq-auth"; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Ensuring RabbitMQ is running...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if docker ps --filter "name=rabbitmq-auth" --format "{{.Names}}" | grep -q "rabbitmq-auth"; then \
 		echo "$(GREEN)  ✓ RabbitMQ container is already running$(NC)"; \
 	elif docker ps -a --filter "name=rabbitmq-auth" --format "{{.Names}}" | grep -q "rabbitmq-auth"; then \
 		echo "$(YELLOW)  Starting existing RabbitMQ container...$(NC)"; \
@@ -372,8 +421,8 @@ ensure-services: ## Ensure all required services are running (PostgreSQL, Rabbit
 		echo "$(GREEN)  ✓ RabbitMQ started$(NC)"; \
 	fi
 	@# Ensure MongoDB is running
-	@echo "$(YELLOW)Ensuring MongoDB is running...$(NC)"
-	@if docker ps --filter "name=mongodb-logs" --format "{{.Names}}" | grep -q "mongodb-logs"; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Ensuring MongoDB is running...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if docker ps --filter "name=mongodb-logs" --format "{{.Names}}" | grep -q "mongodb-logs"; then \
 		echo "$(GREEN)  ✓ MongoDB container is already running$(NC)"; \
 	elif docker ps -a --filter "name=mongodb-logs" --format "{{.Names}}" | grep -q "mongodb-logs"; then \
 		echo "$(YELLOW)  Starting existing MongoDB container...$(NC)"; \
@@ -388,8 +437,8 @@ ensure-services: ## Ensure all required services are running (PostgreSQL, Rabbit
 		echo "$(GREEN)  ✓ MongoDB started$(NC)"; \
 	fi
 	@# Ensure OTEL Collector is running
-	@echo "$(YELLOW)Ensuring OTEL Collector is running...$(NC)"
-	@if docker ps --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector"; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Ensuring OTEL Collector is running...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if docker ps --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector"; then \
 		echo "$(GREEN)  ✓ OTEL Collector container is already running$(NC)"; \
 	elif docker ps -a --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector"; then \
 		echo "$(YELLOW)  Starting existing OTEL Collector container...$(NC)"; \
@@ -418,7 +467,7 @@ build-webapi-project: ## Build the webapi .NET project (dotnet build)
 		echo "$(RED)  ✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
 		exit 1; \
 	fi
-	@if dotnet build BoilerPlate.Authentication.WebApi/BoilerPlate.Authentication.WebApi.csproj -c Release 2>&1; then \
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Authentication.WebApi/BoilerPlate.Authentication.WebApi.csproj -c Release -m 2>&1; then \
 		echo "$(GREEN)  ✓ WebAPI project built successfully$(NC)"; \
 	else \
 		echo "$(RED)  ✗ WebAPI project build failed$(NC)"; \
@@ -431,10 +480,23 @@ build-audit-project: ## Build the audit service .NET project (dotnet build)
 		echo "$(RED)  ✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
 		exit 1; \
 	fi
-	@if dotnet build BoilerPlate.Services.Audit/BoilerPlate.Services.Audit.csproj -c Release 2>&1; then \
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Services.Audit/BoilerPlate.Services.Audit.csproj -c Release -m 2>&1; then \
 		echo "$(GREEN)  ✓ Audit service project built successfully$(NC)"; \
 	else \
 		echo "$(RED)  ✗ Audit service project build failed$(NC)"; \
+		exit 1; \
+	fi
+
+build-event-logs-project: ## Build the event logs service .NET project (dotnet build)
+	@echo "$(YELLOW)Building event logs service .NET project...$(NC)"
+	@if ! command -v dotnet > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
+		exit 1; \
+	fi
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Services.EventLogs/BoilerPlate.Services.EventLogs.csproj -c Release -m 2>&1; then \
+		echo "$(GREEN)  ✓ Event logs service project built successfully$(NC)"; \
+	else \
+		echo "$(RED)  ✗ Event logs service project build failed$(NC)"; \
 		exit 1; \
 	fi
 
@@ -444,7 +506,7 @@ build-diagnostics-project: ## Build the diagnostics API .NET project (dotnet bui
 		echo "$(RED)  ✗ .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
 		exit 1; \
 	fi
-	@if dotnet build BoilerPlate.Diagnostics.WebApi/BoilerPlate.Diagnostics.WebApi.csproj -c Release 2>&1; then \
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Diagnostics.WebApi/BoilerPlate.Diagnostics.WebApi.csproj -c Release -m 2>&1; then \
 		echo "$(GREEN)  ✓ Diagnostics API project built successfully$(NC)"; \
 	else \
 		echo "$(RED)  ✗ Diagnostics API project build failed$(NC)"; \
@@ -452,22 +514,22 @@ build-diagnostics-project: ## Build the diagnostics API .NET project (dotnet bui
 	fi
 
 build-frontend-project: ## Build the frontend Angular project (npm install and build)
-	@echo "$(YELLOW)Building frontend Angular project...$(NC)"
-	@if ! command -v node > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Building frontend Angular project...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if ! command -v node > /dev/null 2>&1; then \
 		echo "$(RED)  ✗ Node.js is not installed. Please install Node.js 18+ first.$(NC)"; \
 		echo "$(YELLOW)  Frontend build will be skipped. Docker build will handle it.$(NC)"; \
 		exit 0; \
 	fi
-	@if ! command -v npm > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && if ! command -v npm > /dev/null 2>&1; then \
 		echo "$(RED)  ✗ npm is not installed. Please install npm first.$(NC)"; \
 		echo "$(YELLOW)  Frontend build will be skipped. Docker build will handle it.$(NC)"; \
 		exit 0; \
 	fi
-	@if [ ! -d "BoilerPlate.Frontend" ]; then \
+	@cd "$(PROJECT_ROOT)" && if [ ! -d "BoilerPlate.Frontend" ]; then \
 		echo "$(YELLOW)  ⚠ Frontend directory not found. Skipping frontend build.$(NC)"; \
 		exit 0; \
 	fi
-	@cd BoilerPlate.Frontend && \
+	@cd "$(PROJECT_ROOT)/BoilerPlate.Frontend" && \
 	if [ ! -d "node_modules" ]; then \
 		echo "$(YELLOW)  Installing npm dependencies...$(NC)"; \
 		npm install 2>&1 || { \
@@ -476,15 +538,15 @@ build-frontend-project: ## Build the frontend Angular project (npm install and b
 		}; \
 	fi && \
 	echo "$(YELLOW)  Building Angular application...$(NC)" && \
-	npm run build 2>&1 || { \
+	NODE_OPTIONS="--max-old-space-size=4096" npm run build 2>&1 || { \
 		echo "$(YELLOW)  ⚠ npm build failed. Docker build will handle it.$(NC)"; \
 		exit 0; \
 	} && \
 	echo "$(GREEN)  ✓ Frontend project built successfully$(NC)"
 
 ensure-postgres: ## Ensure PostgreSQL service is running (starts it if needed)
-	@echo "$(YELLOW)Ensuring PostgreSQL is running...$(NC)"
-	@if docker ps --filter "name=postgres-auth" --format "{{.Names}}" | grep -q "postgres-auth"; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Ensuring PostgreSQL is running...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if docker ps --filter "name=postgres-auth" --format "{{.Names}}" | grep -q "postgres-auth"; then \
 		echo "$(GREEN)  ✓ PostgreSQL container is already running$(NC)"; \
 		if PGPASSWORD="$(POSTGRES_PASSWORD)" docker exec -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres-auth pg_isready -U "$(POSTGRES_USER)" > /dev/null 2>&1; then \
 			echo "$(GREEN)  ✓ PostgreSQL is ready to accept connections$(NC)"; \
@@ -534,20 +596,20 @@ ensure-postgres: ## Ensure PostgreSQL service is running (starts it if needed)
 	fi
 
 run-migration: ensure-services ## Run database migrations (requires PostgreSQL to be running and ready)
-	@echo "$(YELLOW)Running database migrations...$(NC)"
-	@if [ ! -f .env ]; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Running database migrations...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if [ ! -f .env ]; then \
 		echo "$(RED)  ✗ .env file not found. Run 'make setup-env' first.$(NC)"; \
 		exit 1; \
 	fi
-	@if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
 		echo "$(YELLOW)  ⚠ dotnet-ef tool is not available. Skipping migration.$(NC)"; \
 		echo "$(YELLOW)  Install with: dotnet tool install --global dotnet-ef --version 8.0.0$(NC)"; \
 		echo "$(YELLOW)  Then add to PATH: export PATH=\"$$HOME/.dotnet/tools:$$PATH\"$(NC)"; \
 		echo "$(YELLOW)  Run 'make migrate' manually after fixing the dotnet-ef tool$(NC)"; \
 		exit 0; \
 	fi
-	@echo "$(YELLOW)  Verifying PostgreSQL is ready for connections...$(NC)"
-	@if ! PGPASSWORD="$(POSTGRES_PASSWORD)" docker exec -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres-auth pg_isready -U "$(POSTGRES_USER)" > /dev/null 2>&1 && ! PGPASSWORD="$(POSTGRES_PASSWORD)" pg_isready -h "$(POSTGRES_HOST)" -p "$(POSTGRES_PORT)" -U "$(POSTGRES_USER)" > /dev/null 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)  Verifying PostgreSQL is ready for connections...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if ! PGPASSWORD="$(POSTGRES_PASSWORD)" docker exec -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres-auth pg_isready -U "$(POSTGRES_USER)" > /dev/null 2>&1 && ! PGPASSWORD="$(POSTGRES_PASSWORD)" pg_isready -h "$(POSTGRES_HOST)" -p "$(POSTGRES_PORT)" -U "$(POSTGRES_USER)" > /dev/null 2>&1; then \
 		echo "$(YELLOW)  ⚠ PostgreSQL is not ready. Waiting a bit longer...$(NC)"; \
 		sleep 3; \
 		if ! PGPASSWORD="$(POSTGRES_PASSWORD)" docker exec -e PGPASSWORD="$(POSTGRES_PASSWORD)" postgres-auth pg_isready -U "$(POSTGRES_USER)" > /dev/null 2>&1 && ! PGPASSWORD="$(POSTGRES_PASSWORD)" pg_isready -h "$(POSTGRES_HOST)" -p "$(POSTGRES_PORT)" -U "$(POSTGRES_USER)" > /dev/null 2>&1; then \
@@ -559,7 +621,7 @@ run-migration: ensure-services ## Run database migrations (requires PostgreSQL t
 	@echo "$(GREEN)  ✓ PostgreSQL is ready for migrations$(NC)"
 	@echo "$(YELLOW)  Applying migrations with credentials...$(NC)"
 	@echo "$(YELLOW)  Connection: Host=$(POSTGRES_HOST), Port=$(POSTGRES_PORT), Database=$(POSTGRES_DB), User=$(POSTGRES_USER)$(NC)"
-	@if PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1; then \
+	@cd "$(PROJECT_ROOT)" && if PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1; then \
 		echo "$(GREEN)  ✓ Migrations applied successfully$(NC)"; \
 	else \
 		MIGRATION_EXIT=$$?; \
@@ -571,25 +633,35 @@ run-migration: ensure-services ## Run database migrations (requires PostgreSQL t
 	fi
 
 migrate: ## Apply database migrations (can be run independently)
-	@echo "$(YELLOW)Applying database migrations...$(NC)"
-	@echo "$(YELLOW)  Connection: Host=$(POSTGRES_HOST), Port=$(POSTGRES_PORT), Database=$(POSTGRES_DB), User=$(POSTGRES_USER)$(NC)"
-	@PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1 | sed '/MONGODB_CONNECTION_STRING/d' || true
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Applying database migrations...$(NC)"
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)  Connection: Host=$(POSTGRES_HOST), Port=$(POSTGRES_PORT), Database=$(POSTGRES_DB), User=$(POSTGRES_USER)$(NC)"
+	@cd "$(PROJECT_ROOT)" && PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1 | sed '/MONGODB_CONNECTION_STRING/d' || true
 	@echo "$(GREEN)✓ Migration command completed$(NC)"
 
 migrate-only: ## Apply database migrations without ensuring services (assumes PostgreSQL is already running)
 	@echo "$(YELLOW)Applying database migrations (assuming PostgreSQL is already running)...$(NC)"
-	@if [ ! -f .env ]; then \
+	@cd "$(PROJECT_ROOT)" && if [ ! -f .env ]; then \
 		echo "$(RED)  ✗ .env file not found. Run 'make setup-env' first.$(NC)"; \
 		exit 1; \
 	fi
-	@if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
-		echo "$(RED)  ✗ dotnet-ef tool is not available. Please install it first.$(NC)"; \
-		echo "$(YELLOW)  Install with: dotnet tool install --global dotnet-ef --version 8.0.0$(NC)"; \
-		echo "$(YELLOW)  Then add to PATH: export PATH=\"$$HOME/.dotnet/tools:$$PATH\"$(NC)"; \
-		exit 1; \
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+		echo "$(YELLOW)  Installing dotnet-ef tool...$(NC)"; \
+		if dotnet tool install --global dotnet-ef --version 8.0.0 2>&1; then \
+			echo "$(GREEN)  ✓ dotnet-ef tool installed$(NC)"; \
+		else \
+			echo "$(YELLOW)  ⚠ dotnet-ef tool is not available. Skipping migration.$(NC)"; \
+			echo "$(YELLOW)  Install with: dotnet tool install --global dotnet-ef --version 8.0.0$(NC)"; \
+			echo "$(YELLOW)  Run 'make migrate' manually after installing$(NC)"; \
+			exit 0; \
+		fi; \
 	fi
-	@echo "$(YELLOW)  Connection: Host=$(POSTGRES_HOST), Port=$(POSTGRES_PORT), Database=$(POSTGRES_DB), User=$(POSTGRES_USER)$(NC)"
-	@if PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1 | sed '/MONGODB_CONNECTION_STRING/d'; then \
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+		echo "$(YELLOW)  ⚠ dotnet-ef tool is not available. Skipping migration.$(NC)"; \
+		echo "$(YELLOW)  Run 'make migrate' manually after installing dotnet-ef$(NC)"; \
+		exit 0; \
+	fi
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)  Connection: Host=$(POSTGRES_HOST), Port=$(POSTGRES_PORT), Database=$(POSTGRES_DB), User=$(POSTGRES_USER)$(NC)"
+	@cd "$(PROJECT_ROOT)" && if PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1 | sed '/MONGODB_CONNECTION_STRING/d'; then \
 		echo "$(GREEN)  ✓ Migrations applied successfully$(NC)"; \
 	else \
 		MIGRATION_EXIT=$$?; \
@@ -696,12 +768,12 @@ rebuild-webapi-docker: ensure-services ## Build the webapi Docker image and crea
 		docker-compose stop webapi 2>/dev/null || docker compose stop webapi 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building webapi image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
 	@echo "$(YELLOW)  If base images are not cached, this will fail. Cache them first with:$(NC)"
 	@echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"
 	@echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"
 	@if command -v docker > /dev/null 2>&1; then \
-		if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Authentication.WebApi/Dockerfile -t boilerplate-authentication-webapi:latest . 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.WebApi/Dockerfile -t boilerplate-authentication-webapi:latest . 2>&1; then \
 			echo "$(GREEN)  ✓ WebAPI image built successfully (using cached base images)$(NC)"; \
 			echo "$(YELLOW)  Creating webapi container (not starting it)...$(NC)"; \
 			if docker ps -a --filter "name=boilerplate-auth-api" --format "{{.Names}}" | grep -q "boilerplate-auth-api"; then \
@@ -773,8 +845,8 @@ rebuild-webapi-image: ## Build the webapi Docker image without ensuring services
 		docker-compose rm -f webapi 2>/dev/null || docker compose rm -f webapi 2>/dev/null || docker rm -f boilerplate-auth-api 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building webapi image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
-	@if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Authentication.WebApi/Dockerfile -t boilerplate-authentication-webapi:latest . 2>&1; then \
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.WebApi/Dockerfile -t boilerplate-authentication-webapi:latest . 2>&1; then \
 		echo "$(GREEN)  ✓ WebAPI image built successfully$(NC)"; \
 	else \
 		BUILD_EXIT=$$?; \
@@ -798,8 +870,8 @@ rebuild-audit-image: ## Build the audit service Docker image without ensuring se
 		docker-compose rm -f audit 2>/dev/null || docker compose rm -f audit 2>/dev/null || docker rm -f boilerplate-services-audit 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building audit service image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
-	@if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Services.Audit/Dockerfile -t boilerplate-services-audit:latest . 2>&1; then \
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Services.Audit/Dockerfile -t boilerplate-services-audit:latest . 2>&1; then \
 		echo "$(GREEN)  ✓ Audit service image built successfully$(NC)"; \
 	else \
 		BUILD_EXIT=$$?; \
@@ -823,8 +895,8 @@ rebuild-diagnostics-image: ## Build the diagnostics API Docker image without ens
 		docker-compose rm -f diagnostics 2>/dev/null || docker compose rm -f diagnostics 2>/dev/null || docker rm -f boilerplate-diagnostics-api 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building diagnostics API image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
-	@if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
 		echo "$(GREEN)  ✓ Diagnostics API image built successfully$(NC)"; \
 	else \
 		BUILD_EXIT=$$?; \
@@ -848,9 +920,9 @@ rebuild-diagnostics-docker: ensure-services ## Build the diagnostics API Docker 
 		docker-compose stop diagnostics 2>/dev/null || docker compose stop diagnostics 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building diagnostics API image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
 	@if command -v docker > /dev/null 2>&1; then \
-		if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Diagnostics.WebApi/Dockerfile -t boilerplate-diagnostics-webapi:latest . 2>&1; then \
 			echo "$(GREEN)  ✓ Diagnostics API image built successfully (using cached base images)$(NC)"; \
 			echo "$(YELLOW)  Creating diagnostics API container (not starting it)...$(NC)"; \
 			if docker ps -a --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api"; then \
@@ -877,15 +949,14 @@ rebuild-diagnostics-docker: ensure-services ## Build the diagnostics API Docker 
 
 rebuild-diagnostics: rebuild-diagnostics-docker ## Rebuild the diagnostics API Docker image (alias for rebuild-diagnostics-docker)
 
-redeploy: build-webapi-project build-audit-project build-diagnostics-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-diagnostics-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-diagnostics docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, diagnostics, and frontend services (leaves third-party services unchanged)
+redeploy: build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-event-logs-image rebuild-diagnostics-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, event-logs, diagnostics, and frontend services (leaves third-party services unchanged)
 	@echo "$(GREEN)✓ Redeploy complete!$(NC)"
 	@echo ""
-	@echo "$(YELLOW)Service URLs:$(NC)"
+	@echo "$(YELLOW)Service URLs (all via port 4200):$(NC)"
 	@echo "  - Frontend: http://localhost:4200"
-	@echo "  - Web API: http://localhost:8080"
-	@echo "  - Swagger UI: http://localhost:8080/swagger"
-	@echo "  - Diagnostics API: http://localhost:8082"
-	@echo "  - Diagnostics Swagger: http://localhost:8082/swagger"
+	@echo "  - Auth API Swagger: http://localhost:4200/swagger"
+	@echo "  - Diagnostics Swagger: http://localhost:4200/diagnostics/swagger"
+	@echo "  - RabbitMQ Management: http://localhost:4200/amqp/"
 
 rebuild-webapi: rebuild-webapi-docker ## Rebuild the webapi Docker image (alias for rebuild-webapi-docker)
 
@@ -901,12 +972,12 @@ rebuild-audit-docker: ensure-services ## Build the audit service Docker image an
 		docker-compose stop audit 2>/dev/null || docker compose stop audit 2>/dev/null || true; \
 	fi
 	@echo "$(YELLOW)  Building audit service image (using cached base images, only rebuilding code changes)...$(NC)"
-	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=0 to use legacy build (prevents pulling base images)$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
 	@echo "$(YELLOW)  If base images are not cached, this will fail. Cache them first with:$(NC)"
 	@echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"
 	@echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"
 	@if command -v docker > /dev/null 2>&1; then \
-		if DOCKER_BUILDKIT=0 docker build --pull=false -f BoilerPlate.Services.Audit/Dockerfile -t boilerplate-services-audit:latest . 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Services.Audit/Dockerfile -t boilerplate-services-audit:latest . 2>&1; then \
 			echo "$(GREEN)  ✓ Audit service image built successfully (using cached base images)$(NC)"; \
 			echo "$(YELLOW)  Creating audit container (not starting it)...$(NC)"; \
 			if docker ps -a --filter "name=boilerplate-services-audit" --format "{{.Names}}" | grep -q "boilerplate-services-audit"; then \
@@ -967,6 +1038,47 @@ rebuild-audit-docker: ensure-services ## Build the audit service Docker image an
 
 rebuild-audit: rebuild-audit-docker ## Rebuild the audit service Docker image (alias for rebuild-audit-docker)
 
+rebuild-event-logs-image: ## Build the event logs service Docker image
+	@echo "$(YELLOW)Rebuilding event logs service Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(RED)  ✗ Docker is not running. Please start Docker Desktop first.$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps -a --filter "name=boilerplate-services-event-logs" --format "{{.Names}}" | grep -q "boilerplate-services-event-logs"; then \
+		echo "$(YELLOW)  Stopping and removing existing event logs container...$(NC)"; \
+		docker-compose stop event-logs 2>/dev/null || docker compose stop event-logs 2>/dev/null || true; \
+		docker-compose rm -f event-logs 2>/dev/null || docker compose rm -f event-logs 2>/dev/null || docker rm -f boilerplate-services-event-logs 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building event logs service image...$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Services.EventLogs/Dockerfile -t boilerplate-services-event-logs:latest . 2>&1; then \
+		echo "$(GREEN)  ✓ Event logs service image built successfully$(NC)"; \
+	else \
+		echo "$(RED)  ✗ Build failed$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-event-logs-docker: ensure-services ## Build the event logs service Docker image and create the container
+	@echo "$(YELLOW)Rebuilding event logs service Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(YELLOW)  ⚠ Docker is not running. Skipping image rebuild.$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps --filter "name=boilerplate-services-event-logs" --format "{{.Names}}" | grep -q "boilerplate-services-event-logs"; then \
+		docker-compose stop event-logs 2>/dev/null || docker compose stop event-logs 2>/dev/null || true; \
+	fi
+	@cd "$(or $(strip $(PROJECT_ROOT)),.)" && "$(MAKE)" rebuild-event-logs-image
+	@docker-compose create --no-build event-logs 2>/dev/null || docker compose create --no-build event-logs 2>/dev/null || true
+
+rebuild-event-logs: rebuild-event-logs-docker ## Rebuild the event logs service Docker image (alias)
+
+docker-up-event-logs: ## Start only the event logs service
+	@echo "$(YELLOW)Starting event logs service...$(NC)"
+	@docker-compose up -d --no-deps event-logs 2>&1 || docker compose up -d --no-deps event-logs 2>&1 || true
+	@echo "$(GREEN)✓ Event logs service started$(NC)"
+
+docker-logs-event-logs: ## View logs from event logs service only
+	@docker-compose logs -f event-logs || docker compose logs -f event-logs
+
 rebuild-frontend-docker: ## Build the frontend Docker image
 	@echo "$(YELLOW)Rebuilding frontend Docker image...$(NC)"
 	@if ! docker info > /dev/null 2>&1; then \
@@ -980,11 +1092,14 @@ rebuild-frontend-docker: ## Build the frontend Docker image
 	fi
 	@echo "$(YELLOW)  Building frontend image...$(NC)"
 	@if command -v docker > /dev/null 2>&1; then \
-		if docker build -f BoilerPlate.Frontend/Dockerfile -t boilerplate-frontend:latest . 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Frontend/Dockerfile -t boilerplate-frontend:latest . 2>&1; then \
 			echo "$(GREEN)  ✓ Frontend image built successfully$(NC)"; \
 		else \
 			BUILD_EXIT=$$?; \
 			echo "$(RED)  ✗ Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+			echo "$(YELLOW)  If you see 'error getting credentials', try:$(NC)"; \
+			echo "$(YELLOW)    docker pull node:18-alpine && docker pull nginx:alpine$(NC)"; \
+			echo "$(YELLOW)  Or restart Docker Desktop and run 'make rebuild-frontend-docker' again$(NC)"; \
 			exit 1; \
 		fi; \
 	else \
@@ -994,9 +1109,9 @@ rebuild-frontend-docker: ## Build the frontend Docker image
 
 rebuild-frontend: rebuild-frontend-docker ## Rebuild the frontend Docker image (alias for rebuild-frontend-docker)
 
-docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-diagnostics-docker rebuild-frontend-docker ## Build and start the webapi, audit, diagnostics, and frontend services
+docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker ## Build and start the webapi, audit, event-logs, diagnostics, and frontend services
 	@echo "$(YELLOW)Starting services...$(NC)"
-	@docker-compose up -d webapi audit diagnostics frontend || docker compose up -d webapi audit diagnostics frontend || true
+	@docker-compose up -d webapi audit event-logs diagnostics frontend || docker compose up -d webapi audit event-logs diagnostics frontend || true
 	@echo "$(GREEN)✓ Services rebuilt and started$(NC)"
 
 docker-logs: ## View logs from all services

@@ -13,7 +13,7 @@ public abstract class BaseEventLogDbContext : DbContext
     ///     Initializes a new instance of the <see cref="BaseEventLogDbContext" /> class.
     /// </summary>
     /// <param name="options">The options to be used by a DbContext.</param>
-    protected BaseEventLogDbContext(DbContextOptions<BaseEventLogDbContext> options)
+    protected BaseEventLogDbContext(DbContextOptions options)
         : base(options)
     {
     }

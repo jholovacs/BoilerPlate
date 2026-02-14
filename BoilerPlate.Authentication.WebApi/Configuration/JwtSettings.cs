@@ -44,4 +44,10 @@ public class JwtSettings
     ///     Password for the private key (if the private key is encrypted)
     /// </summary>
     public string? PrivateKeyPassword { get; set; }
+
+    /// <summary>
+    ///     OAuth2/OIDC issuer URL for discovery and RabbitMQ integration.
+    ///     Must be reachable by both browsers and RabbitMQ (e.g. http://host.docker.internal:4200 in Docker).
+    /// </summary>
+    public string? OAuth2IssuerUrl { get; set; }
 }

@@ -69,7 +69,8 @@
               "buildTarget": "boilerplate-frontend:build:production"
             },
             "development": {
-              "buildTarget": "boilerplate-frontend:build:development"
+              "buildTarget": "boilerplate-frontend:build:development",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

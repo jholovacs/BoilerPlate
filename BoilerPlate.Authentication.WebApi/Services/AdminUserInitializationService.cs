@@ -282,4 +282,5 @@ public class AdminUserInitializationService : IHostedService
             logger.LogInformation("Registered email domain {Domain} for system tenant {TenantId}", systemLocalDomain, systemTenantId);
         }
     }
+
 }

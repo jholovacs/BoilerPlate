@@ -13,8 +13,8 @@ using BoilerPlate.ServiceBus.RabbitMq.Extensions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OpenApi.Models;
-using MongoDB.Driver;
 using Serilog;
+using Serilog.Sinks.RabbitMQ;
 using Serilog.Events;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
@@ -51,48 +51,51 @@ if (isDesignTime)
 }
 else
 {
-    // Normal runtime mode - configure MongoDB logging
-    var mongoDbConnectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING");
+    // Normal runtime mode - configure RabbitMQ logging (trace level and above)
+    // Event logs flow: Serilog -> RabbitMQ queue -> EventLogs service -> MongoDB + topic for real-time
+    var rabbitConnectionString = Environment.GetEnvironmentVariable("RABBITMQ_CONNECTION_STRING");
     var loggerConfig = new LoggerConfiguration()
-        .MinimumLevel.Information()
+        .MinimumLevel.Verbose()
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Application", "BoilerPlate.Authentication.WebApi");
 
-    // Configure MongoDB if connection string is provided
-    if (!string.IsNullOrWhiteSpace(mongoDbConnectionString))
+    loggerConfig.WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information);
+
+    if (!string.IsNullOrWhiteSpace(rabbitConnectionString))
     {
         try
         {
-            // Parse database name from connection string
-            var uri = new Uri(mongoDbConnectionString);
-            var databaseName = uri.AbsolutePath.TrimStart('/');
-            if (string.IsNullOrWhiteSpace(databaseName)) databaseName = "logs";
+            var uri = new Uri(rabbitConnectionString);
+            var host = uri.Host;
+            var port = uri.Port > 0 ? uri.Port : 5672;
+            var user = uri.UserInfo?.Split(':')[0] ?? "guest";
+            var pass = uri.UserInfo?.Contains(':') == true ? uri.UserInfo.Split(':', 2)[1] : "guest";
 
-            var mongoClient = new MongoClient(mongoDbConnectionString);
-            var mongoDatabase = mongoClient.GetDatabase(databaseName);
-
-            loggerConfig.WriteTo.MongoDB(
-                mongoDatabase,
-                collectionName: "logs",
-                restrictedToMinimumLevel: LogEventLevel.Information);
+            loggerConfig.WriteTo.RabbitMQ((clientConfig, sinkConfig) =>
+            {
+                clientConfig.Username = user;
+                clientConfig.Password = pass;
+                clientConfig.Hostnames.Add(host);
+                clientConfig.Port = port;
+                clientConfig.Exchange = "event-logs";
+                clientConfig.ExchangeType = "fanout";
+                clientConfig.AutoCreateExchange = true;
+                clientConfig.DeliveryMode = RabbitMQDeliveryMode.Durable;
+                sinkConfig.RestrictedToMinimumLevel = LogEventLevel.Verbose;
+            });
         }
         catch (Exception ex)
         {
-            // If MongoDB configuration fails, log to console as fallback
-            loggerConfig.WriteTo.Console();
-            Console.WriteLine($"Warning: Failed to configure MongoDB logging: {ex.Message}");
+            Console.WriteLine($"Warning: Failed to configure RabbitMQ logging: {ex.Message}");
         }
     }
     else
     {
-        // No MongoDB connection string - use console logging as fallback
-        loggerConfig.WriteTo.Console();
-        // Throw error for runtime mode if MongoDB connection string is missing
         throw new InvalidOperationException(
-            "MONGODB_CONNECTION_STRING environment variable is required. " +
-            "Format: mongodb://username:password@host:port/database or mongodb://host:port/database");
+            "RABBITMQ_CONNECTION_STRING environment variable is required for event log streaming. " +
+            "Format: amqp://username:password@host:port/");
     }
 
     Log.Logger = loggerConfig.CreateLogger();
@@ -286,8 +289,7 @@ try
         // Add admin user initialization service
         builder.Services.AddHostedService<AdminUserInitializationService>();
 
-        // Add MongoDB log index service to create timestamp index on startup
-        builder.Services.AddHostedService<MongoDbLogIndexService>();
+        // Event logs are written by BoilerPlate.Services.EventLogs (consumes from RabbitMQ, writes to MongoDB)
     }
 
     var app = builder.Build();
@@ -316,8 +318,7 @@ try
         c.DefaultModelRendering(ModelRendering.Model);
     });
 
-    app.UseHttpsRedirection();
-
+    // Skip UseHttpsRedirection: API runs behind nginx (HTTPS) in Docker; no HTTPS port configured.
     // CORS must be before UseRouting and endpoints
     app.UseCors();
 

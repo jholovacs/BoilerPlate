@@ -51,6 +51,16 @@ export class BreadcrumbComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (segments[0] === 'event-logs') {
+      this.items.push({ label: 'Event logs', url: '/event-logs' });
+      return;
+    }
+
+    if (segments[0] === 'audit-logs') {
+      this.items.push({ label: 'Audit logs', url: '/audit-logs' });
+      return;
+    }
+
     if (segments[0] === 'tenants') {
       const idIndex = 1;
       const id = segments[idIndex];

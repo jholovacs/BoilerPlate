@@ -1,0 +1,73 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-left {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-input {
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.event-type-filter {
+  min-width: 180px;
+}
+
+.col-timestamp {
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.col-event-data {
+  max-width: 300px;
+  word-break: break-word;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.pagination-info {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #666;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.pagination-text {
+  font-size: 14px;
+  color: #666;
+}

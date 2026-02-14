@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Description>Shared abstractions for event logs: message types for RabbitMQ topic (real-time diagnostics)</Description>
+    <Copyright>Copyright (c) 2025 Jeremy Holovacs</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BoilerPlate.ServiceBus.Abstractions\BoilerPlate.ServiceBus.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

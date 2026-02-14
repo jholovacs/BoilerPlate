@@ -1,0 +1,7 @@
+{
+  "/diagnostics": {
+    "target": "http://localhost:8082",
+    "pathRewrite": { "^/diagnostics": "" },
+    "secure": false
+  }
+}

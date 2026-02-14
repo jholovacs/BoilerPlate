@@ -31,6 +31,11 @@ JWT_PRIVATE_KEY=$privateKeyBase64
 JWT_PUBLIC_KEY=$publicKeyBase64
 JWT_EXPIRATION_MINUTES=60
 
+# JWT Issuer URL for microservices that validate tokens (e.g. Diagnostics).
+# Used to fetch public key from /.well-known/jwks.json when JWT_PUBLIC_KEY is not set.
+# Docker default: http://webapi:8080 | Local: http://localhost:8080
+# JWT_ISSUER_URL=http://webapi:8080
+
 # Database Connection Strings
 ConnectionStrings__PostgreSqlConnection=Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=SecurePassword123!
 
@@ -39,6 +44,9 @@ RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
 
 # MongoDB Connection String
 MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+
+# OpenTelemetry Collector Connection String
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 
 # Admin User Configuration
 ADMIN_USERNAME=admin

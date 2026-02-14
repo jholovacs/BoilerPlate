@@ -16,7 +16,7 @@ public sealed class EventLogsMongoDbContext : BaseEventLogDbContext
     ///     Initializes a new instance of the <see cref="EventLogsMongoDbContext" /> class.
     /// </summary>
     /// <param name="options">The options to be used by a DbContext (MongoDB).</param>
-    public EventLogsMongoDbContext(DbContextOptions<BaseEventLogDbContext> options)
+    public EventLogsMongoDbContext(DbContextOptions<EventLogsMongoDbContext> options)
         : base(options)
     {
     }
@@ -40,8 +40,9 @@ public sealed class EventLogsMongoDbContext : BaseEventLogDbContext
             entity.Property(e => e.TraceId).HasElementName("TraceId");
             entity.Property(e => e.SpanId).HasElementName("SpanId");
             entity.Property(e => e.Exception).HasElementName("Exception");
-            entity.Property(e => e.Properties).HasElementName("Properties")
-                .HasConversion(BsonDocumentToStringConverter.Default);
+            // Properties is BsonDocument in MongoDB; EF provider does not support it. Ignore to avoid mapping errors.
+            // Tenant filtering for non-Service-Admin is handled in controller (returns empty when Properties unavailable).
+            entity.Ignore(e => e.Properties);
         });
     }
 }

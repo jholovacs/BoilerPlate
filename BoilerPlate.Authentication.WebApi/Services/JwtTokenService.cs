@@ -127,6 +127,55 @@ public class JwtTokenService
     }
 
     /// <summary>
+    ///     Generates a JWT token for OAuth2 clients (e.g. RabbitMQ Management).
+    ///     Supports custom issuer, audience, and additional scope claims.
+    /// </summary>
+    public string GenerateToken(ApplicationUser user, IEnumerable<string> roles, string? issuerOverride = null,
+        string? audienceOverride = null, IEnumerable<string>? additionalScopeClaims = null)
+    {
+        var rolesList = roles?.ToList() ?? new List<string>();
+        var issuer = !string.IsNullOrWhiteSpace(issuerOverride) ? issuerOverride : _jwtSettings.Issuer;
+        var audience = !string.IsNullOrWhiteSpace(audienceOverride) ? audienceOverride : _jwtSettings.Audience;
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+            new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
+            new("tenant_id", user.TenantId.ToString()),
+            new("http://schemas.microsoft.com/identity/claims/tenantid", user.TenantId.ToString()),
+            new("user_id", user.Id.ToString())
+        };
+
+        foreach (var role in rolesList)
+            if (!string.IsNullOrWhiteSpace(role))
+                claims.Add(new Claim(ClaimTypes.Role, role));
+
+        if (rolesList.Any())
+            claims.Add(new Claim("roles", JsonSerializer.Serialize(rolesList)));
+
+        if (!string.IsNullOrEmpty(user.FirstName)) claims.Add(new Claim(ClaimTypes.GivenName, user.FirstName));
+        if (!string.IsNullOrEmpty(user.LastName)) claims.Add(new Claim(ClaimTypes.Surname, user.LastName));
+
+        if (additionalScopeClaims != null)
+            foreach (var scope in additionalScopeClaims)
+                if (!string.IsNullOrWhiteSpace(scope))
+                    claims.Add(new Claim("scope", scope));
+
+        var expirationTime = DateTime.UtcNow.AddMinutes(_jwtSettings.ExpirationMinutes);
+        claims.Add(new Claim(JwtRegisteredClaimNames.Exp,
+            ((DateTimeOffset)expirationTime).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+
+        var key = new RsaSecurityKey(_rsa) { KeyId = "auth-key-1" };
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+
+        var token = new JwtSecurityToken(issuer, audience, claims, expires: expirationTime,
+            signingCredentials: credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
     ///     Generates a refresh token
     /// </summary>
     /// <returns>Refresh token string</returns>

@@ -8,6 +8,7 @@ namespace BoilerPlate.Diagnostics.WebApi.Extensions;
 
 /// <summary>
 ///     DI extensions for JWT validation and authorization (tokens from Authentication WebApi).
+///     Supports JWT_PUBLIC_KEY (env), JWT_ISSUER_URL (fetch from JWKS), or JWT_JWKS_URL (direct JWKS fetch).
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -19,13 +20,20 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>();
-        if (jwtSettings == null || string.IsNullOrWhiteSpace(jwtSettings.PublicKey))
+        // Always register the authorization policy (required by [Authorize(Policy = ...)] on controllers)
+        services.AddAuthorization(options =>
         {
-            // Allow running without JWT for local dev; endpoints will return 401 if [Authorize] is applied
-            return services;
-        }
+            options.AddPolicy(AuthorizationPolicies.DiagnosticsODataAccess, policy =>
+                policy.RequireRole("Service Administrator", "Tenant Administrator"));
+        });
 
+        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
+        if (string.IsNullOrWhiteSpace(jwtSettings.Issuer)) jwtSettings.Issuer = "BoilerPlate.Authentication";
+        if (string.IsNullOrWhiteSpace(jwtSettings.Audience)) jwtSettings.Audience = "BoilerPlate.API";
+
+        SecurityKey? signingKey = null;
+
+        // 1. Try JWT_PUBLIC_KEY (explicit PEM or base64)
         var envPublicKey = configuration["JWT_PUBLIC_KEY"] ?? Environment.GetEnvironmentVariable("JWT_PUBLIC_KEY");
         if (!string.IsNullOrWhiteSpace(envPublicKey))
         {
@@ -39,20 +47,36 @@ public static class ServiceCollectionExtensions
                 catch (FormatException) { /* treat as PEM */ }
             }
             envPublicKey = envPublicKey.Replace("\\n", "\n").Replace("\r\n", "\n").Replace("\r", "\n");
-            jwtSettings.PublicKey = envPublicKey;
+            try
+            {
+                var rsa = RSA.Create();
+                rsa.ImportFromPem(envPublicKey);
+                signingKey = new RsaSecurityKey(rsa) { KeyId = "auth-key-1" };
+            }
+            catch { /* fall through to JWKS */ }
         }
 
-        var rsa = RSA.Create();
-        try
+        // 2. Try JWKS fetch (JWT_ISSUER_URL or JWT_JWKS_URL)
+        if (signingKey == null)
         {
-            rsa.ImportFromPem(jwtSettings.PublicKey);
+            var jwksUrl = configuration["JWT_JWKS_URL"] ?? Environment.GetEnvironmentVariable("JWT_JWKS_URL");
+            if (string.IsNullOrWhiteSpace(jwksUrl))
+            {
+                var issuerUrl = configuration["JWT_ISSUER_URL"] ?? Environment.GetEnvironmentVariable("JWT_ISSUER_URL");
+                if (!string.IsNullOrWhiteSpace(issuerUrl))
+                    jwksUrl = $"{issuerUrl.TrimEnd('/')}/.well-known/jwks.json";
+            }
+            if (!string.IsNullOrWhiteSpace(jwksUrl))
+                signingKey = FetchKeyFromJwks(jwksUrl);
         }
-        catch
+
+        if (signingKey == null)
         {
+            AddAuthenticationWithRejectAllScheme(services);
             return services;
         }
 
-        var key = new RsaSecurityKey(rsa) { KeyId = "auth-key-1" };
+        var key = signingKey;
 
         services.AddAuthentication(options =>
         {
@@ -60,6 +84,20 @@ public static class ServiceCollectionExtensions
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         }).AddJwtBearer(options =>
         {
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var path = context.HttpContext.Request.Path;
+                    if (path.StartsWithSegments("/hubs"))
+                    {
+                        var token = context.Request.Query["access_token"].FirstOrDefault();
+                        if (!string.IsNullOrEmpty(token))
+                            context.Token = token;
+                    }
+                    return Task.CompletedTask;
+                }
+            };
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -73,12 +111,53 @@ public static class ServiceCollectionExtensions
             };
         });
 
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy(AuthorizationPolicies.DiagnosticsODataAccess, policy =>
-                policy.RequireRole("Service Administrator", "Tenant Administrator"));
-        });
-
         return services;
+    }
+
+    /// <summary>
+    ///     Adds JWT Bearer auth with a random key when JWT is not configured.
+    ///     Ensures DefaultChallengeScheme exists so [Authorize] doesn't throw; all requests get 401.
+    /// </summary>
+    private static void AddAuthenticationWithRejectAllScheme(IServiceCollection services)
+    {
+        using var rsa = RSA.Create();
+        rsa.ImportRSAPublicKey(rsa.ExportRSAPublicKey(), out _);
+        var key = new RsaSecurityKey(rsa) { KeyId = "placeholder" };
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        }).AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = key,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false
+            };
+        });
+    }
+
+    /// <summary>
+    ///     Fetches the signing key from the auth service JWKS endpoint.
+    ///     Used when JWT_PUBLIC_KEY is not set but JWT_ISSUER_URL or JWT_JWKS_URL is configured.
+    /// </summary>
+    private static SecurityKey? FetchKeyFromJwks(string jwksUrl)
+    {
+        try
+        {
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var json = client.GetStringAsync(jwksUrl).GetAwaiter().GetResult();
+            var jwks = new JsonWebKeySet(json);
+            return jwks.GetSigningKeys().FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

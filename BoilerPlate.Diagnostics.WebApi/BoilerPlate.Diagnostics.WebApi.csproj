@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.OData" Version="8.2.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.0.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.15.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
@@ -24,6 +25,8 @@
     <ProjectReference Include="..\BoilerPlate.Diagnostics.Database\BoilerPlate.Diagnostics.Database.csproj" />
     <ProjectReference Include="..\BoilerPlate.Diagnostics.EventLogs.MongoDb\BoilerPlate.Diagnostics.EventLogs.MongoDb.csproj" />
     <ProjectReference Include="..\BoilerPlate.Diagnostics.Metrics.OpenTelemetry\BoilerPlate.Diagnostics.Metrics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\BoilerPlate.EventLogs.Abstractions\BoilerPlate.EventLogs.Abstractions.csproj" />
+    <ProjectReference Include="..\BoilerPlate.ServiceBus.RabbitMq\BoilerPlate.ServiceBus.RabbitMq.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,44 @@
+:host {
+  width: 220px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.side-nav {
+  width: 100%;
+  min-height: 100%;
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  padding: 20px 0;
+}
+
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-list li {
+  margin: 0;
+}
+
+.nav-item {
+  display: block;
+  padding: 10px 20px;
+  color: #555;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.nav-item:hover {
+  background: #f5f5f5;
+  color: #667eea;
+}
+
+.nav-item.active {
+  background: #f0f0ff;
+  color: #667eea;
+  font-weight: 600;
+  border-right: 3px solid #667eea;
+}

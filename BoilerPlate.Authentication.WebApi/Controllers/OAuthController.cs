@@ -3,6 +3,7 @@ using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.Entities;
+using BoilerPlate.Authentication.Abstractions;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Models;
 using BoilerPlate.Authentication.WebApi.Services;
@@ -786,7 +787,6 @@ public class OAuthController : ControllerBase
         // Get user roles
         var roles = await _userManager.GetRolesAsync(user);
 
-        // Generate JWT access token
         var accessToken = _jwtTokenService.GenerateToken(user, roles);
         var plainRefreshToken = _jwtTokenService.GenerateRefreshToken();
 

@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: SecurePassword123!
       POSTGRES_DB: BoilerPlateAuth
     ports:
-      - "5432:5432"
+      - "5432:5432"   # Required for make migrate; comment out for single-port deployment
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,14 +23,16 @@ services:
     pull_policy: if_not_present
     container_name: rabbitmq-auth
     restart: unless-stopped
+    hostname: rabbitmq
+    ports:
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: SecurePassword123!
-    ports:
-      - "5672:5672"    # AMQP port
-      - "15672:15672"  # Management UI port
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -45,8 +47,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: SecurePassword123!
-    ports:
-      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -64,12 +64,6 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
       - otel_collector_data:/var/lib/otel-collector
-    ports:
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-      - "8888:8888"   # Prometheus metrics endpoint (collector's own metrics)
-      - "8889:8889"   # Prometheus exporter metrics (collected metrics)
-      - "13133:13133" # Health check extension endpoint
     healthcheck:
       test: ["CMD", "/otelcol-contrib", "--version"]
       interval: 30s
@@ -92,9 +86,6 @@ services:
       dockerfile: BoilerPlate.Authentication.WebApi/Dockerfile
     container_name: boilerplate-auth-api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
-      - "8081:8081"
     environment:
       # PostgreSQL connection (using service name in docker-compose)
       - ConnectionStrings__PostgreSqlConnection=Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=SecurePassword123!
@@ -102,9 +93,7 @@ services:
       - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY}
       - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
       - JWT_EXPIRATION_MINUTES=60
-      # MongoDB connection (using service name in docker-compose)
-      - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
-      # RabbitMQ connection (using service name in docker-compose)
+      # RabbitMQ connection (required for Serilog event log streaming)
       - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
       # OpenTelemetry Collector connection (using service name in docker-compose)
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
@@ -115,8 +104,6 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      mongodb:
         condition: service_healthy
       otel-collector:
         condition: service_healthy
@@ -155,6 +142,23 @@ services:
       retries: 3
       start_period: 40s
 
+  event-logs:
+    image: boilerplate-services-event-logs:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: BoilerPlate.Services.EventLogs/Dockerfile
+    container_name: boilerplate-services-event-logs
+    restart: unless-stopped
+    environment:
+      - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+      - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+
   diagnostics:
     image: boilerplate-diagnostics-webapi:latest
     pull_policy: never
@@ -163,19 +167,23 @@ services:
       dockerfile: BoilerPlate.Diagnostics.WebApi/Dockerfile
     container_name: boilerplate-diagnostics-api
     restart: unless-stopped
-    ports:
-      - "8082:8080"
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
+      - JWT_ISSUER_URL=${JWT_ISSUER_URL:-http://webapi:8080}
       - JwtSettings__Issuer=BoilerPlate.Authentication
       - JwtSettings__Audience=BoilerPlate.API
       - MONGODB_CONNECTION_STRING=mongodb://admin:SecurePassword123!@mongodb:27017/logs?authSource=admin
+      - RABBITMQ_CONNECTION_STRING=amqp://admin:SecurePassword123!@rabbitmq:5672/
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
+      webapi:
+        condition: service_started
       mongodb:
         condition: service_healthy
       otel-collector:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   frontend:
@@ -187,10 +195,17 @@ services:
     container_name: boilerplate-frontend
     restart: unless-stopped
     ports:
-      - "4200:80"
+      - "4200:443"
+    volumes:
+      - ./tls-certs/cert.pem:/etc/nginx/ssl/cert.pem:ro
+      - ./tls-certs/key.pem:/etc/nginx/ssl/key.pem:ro
     depends_on:
       webapi:
         condition: service_started
+      diagnostics:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   postgres_data:

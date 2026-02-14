@@ -150,6 +150,13 @@ export class AuthService {
     return AuthService.userCanManageRoles(user);
   }
 
+  /** True if the current user can access diagnostics (event logs, audit logs) - Service or Tenant Administrator only. */
+  canAccessDiagnostics(): boolean {
+    const user = this.currentUserSubject.value;
+    return AuthService.userHasServiceAdministratorRole(user) ||
+           AuthService.userHasTenantAdministratorRole(user);
+  }
+
   /** True if the current user can revoke refresh tokens for a tenant or user (Service or Tenant Administrator). */
   canRevokeRefreshTokens(): boolean {
     const user = this.currentUserSubject.value;

@@ -2,28 +2,38 @@ import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { VersionCheckService } from './core/services/version-check.service';
 import { AuthService } from './core/services/auth.service';
-import { BreadcrumbComponent } from './shared/breadcrumb/breadcrumb.component';
+import { SideNavComponent } from './shared/side-nav/side-nav.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, BreadcrumbComponent],
+  imports: [RouterOutlet, SideNavComponent],
   template: `
     <div class="app-root">
       @if (authService.isAuthenticated() && !isLoginPage()) {
-        <div class="breadcrumb-container">
-          <app-breadcrumb />
+        <div class="app-layout">
+          <app-side-nav />
+          <main class="main-content">
+            <router-outlet></router-outlet>
+          </main>
         </div>
+      } @else {
+        <router-outlet></router-outlet>
       }
-      <router-outlet></router-outlet>
     </div>
   `,
   styles: [`
     .app-root { min-height: 100vh; }
-    .breadcrumb-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 16px 24px 0;
+    .app-layout {
+      display: flex;
+      min-height: 100vh;
+      align-items: stretch;
+    }
+    .main-content {
+      flex: 1;
+      min-width: 0;
+      min-height: 100%;
+      background: #f5f5f5;
     }
   `]
 })
