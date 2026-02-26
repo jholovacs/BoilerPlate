@@ -169,9 +169,13 @@ make docker-up
 
 Once services are running:
 
+- **Frontend**: http://localhost:4200 (or https://localhost:4200 in Docker)
+  - Login with admin credentials (see Web API admin setup)
+  - Service Administrators: Tenants, RabbitMQ Management (auto-login), Event logs, Audit logs
+  - See [BoilerPlate.Frontend/README.md](BoilerPlate.Frontend/README.md) for role-based access details
 - **Web API**: http://localhost:8080
 - **Swagger UI**: http://localhost:8080/swagger
-- **RabbitMQ Management**: http://localhost:15672
+- **RabbitMQ Management**: http://localhost:15672 (direct) or via frontend link (Service Administrators)
   - Username: `admin`
   - Password: `SecurePassword123!`
 - **PostgreSQL**: localhost:5432

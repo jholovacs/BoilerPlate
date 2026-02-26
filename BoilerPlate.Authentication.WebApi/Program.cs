@@ -252,6 +252,23 @@ try
         // Add RabbitMQ service bus (connection string can be overridden via RABBITMQ_CONNECTION_STRING environment variable)
         builder.Services.AddRabbitMqServiceBus(builder.Configuration);
 
+    // RabbitMQ Management proxy (Service Administrators get auto-login via Basic Auth)
+    var rabbitConn = Environment.GetEnvironmentVariable("RABBITMQ_CONNECTION_STRING");
+    var rabbitMqProxyOptions = new BoilerPlate.Authentication.WebApi.Configuration.RabbitMqProxyOptions();
+    if (!string.IsNullOrWhiteSpace(rabbitConn) && Uri.TryCreate(rabbitConn, UriKind.Absolute, out var rabbitUri))
+    {
+        var host = rabbitUri.Host;
+        var port = 15672; // Management UI port (AMQP is 5672)
+        var user = rabbitUri.UserInfo?.Split(':')[0] ?? "guest";
+        var pass = rabbitUri.UserInfo?.Contains(':') == true ? rabbitUri.UserInfo.Split(':', 2)[1] : "guest";
+        rabbitMqProxyOptions.ManagementBaseUrl = $"http://{host}:{port}";
+        rabbitMqProxyOptions.Username = user;
+        rabbitMqProxyOptions.Password = pass;
+    }
+    builder.Services.AddSingleton(rabbitMqProxyOptions);
+    builder.Services.AddHttpClient("RabbitMqProxy")
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
     // Add CORS - allowed origins from CORS_ALLOWED_ORIGINS (comma-separated), or allow any for local dev if unset
     var corsOrigins = Environment.GetEnvironmentVariable("CORS_ALLOWED_ORIGINS");
     builder.Services.AddCors(options =>

@@ -33,7 +33,7 @@ import { SideNavComponent } from './shared/side-nav/side-nav.component';
       flex: 1;
       min-width: 0;
       min-height: 100%;
-      background: #f5f5f5;
+      background: var(--bg-body);
     }
   `]
 })

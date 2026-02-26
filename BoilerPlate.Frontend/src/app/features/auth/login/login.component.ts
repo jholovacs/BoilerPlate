@@ -71,21 +71,21 @@ import { AuthService } from '../../../core/services/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--login-bg);
       padding: 20px;
     }
 
     .login-card {
-      background: white;
+      background: var(--bg-card);
       border-radius: 12px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow);
       padding: 40px;
       max-width: 450px;
       width: 100%;
     }
 
     .login-card h1 {
-      color: #333;
+      color: var(--text-primary);
       margin-bottom: 30px;
       text-align: center;
       font-size: 28px;
@@ -95,13 +95,13 @@ import { AuthService } from '../../../core/services/auth.service';
       display: block;
       margin-top: 5px;
       font-size: 12px;
-      color: #999;
+      color: var(--text-muted);
     }
 
     .btn-link {
       background: none;
       border: none;
-      color: #667eea;
+      color: var(--primary);
       cursor: pointer;
       font-size: 14px;
       padding: 0;
@@ -109,7 +109,7 @@ import { AuthService } from '../../../core/services/auth.service';
     }
 
     .btn-link:hover {
-      color: #764ba2;
+      color: var(--primary-hover);
     }
 
     button:not(.btn-link) {

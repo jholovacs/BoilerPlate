@@ -9,7 +9,7 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
@@ -41,17 +41,21 @@
 .search-input {
   min-width: 220px;
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .level-select {
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
   min-width: 140px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .table {
@@ -74,12 +78,12 @@
 
 /* Entity IDs (user:guid, tenant:guid) - drilldown on hover */
 .entity-id {
-  border-bottom: 1px dotted #3498db;
+  border-bottom: 1px dotted var(--link);
   cursor: help;
 }
 
 .entity-id:hover {
-  background-color: rgba(52, 152, 219, 0.1);
+  background-color: var(--link-hover-bg);
 }
 
 .col-properties {
@@ -87,7 +91,7 @@
 }
 
 .properties-link {
-  color: #3498db;
+  color: var(--link);
 }
 
 .properties-link:hover {
@@ -95,13 +99,13 @@
 }
 
 .muted {
-  color: #999;
+  color: var(--text-muted);
 }
 
 .col-exception {
   max-width: 300px;
   font-size: 12px;
-  color: #c0392b;
+  color: var(--error);
 }
 
 /* Ellipsis for overflow with hover tooltip (title) and click for modal */
@@ -115,31 +119,31 @@
 }
 
 .truncate-cell:hover {
-  background-color: rgba(102, 126, 234, 0.08);
+  background-color: var(--link-hover-bg);
 }
 
 .level-error {
-  color: #e74c3c;
+  color: var(--error);
   font-weight: 600;
 }
 
 .level-warning {
-  color: #f39c12;
+  color: var(--warning);
   font-weight: 600;
 }
 
 .level-info {
-  color: #3498db;
+  color: var(--info);
 }
 
 .level-debug {
-  color: #95a5a6;
+  color: var(--debug);
 }
 
 .pagination-info {
   margin-bottom: 12px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .pagination {
@@ -152,7 +156,7 @@
 
 .pagination-text {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* Modal for full text view */
@@ -167,9 +171,9 @@
 }
 
 .modal {
-  background: #fff;
+  background: var(--bg-modal);
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
   max-width: 90vw;
   max-height: 85vh;
   display: flex;
@@ -181,13 +185,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .modal-close {
@@ -195,13 +199,13 @@
   border: none;
   font-size: 24px;
   line-height: 1;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0 4px;
 }
 
 .modal-close:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -218,7 +222,7 @@
   font-family: inherit;
   font-size: 14px;
   line-height: 1.5;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .modal-footer {
@@ -226,5 +230,5 @@
   gap: 12px;
   justify-content: flex-end;
   padding: 16px 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }

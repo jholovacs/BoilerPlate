@@ -708,6 +708,17 @@ Open in browser: http://localhost:8080/swagger
 
 ## Accessing Services
 
+### Frontend
+
+- **URL:** http://localhost:4200 (local dev) or https://localhost:4200 (Docker with nginx)
+- **Login:** Use admin credentials configured for the Web API (default: `admin` / `AdminPassword123!`)
+- **Role-based access:**
+  - **All users:** Account, Change password
+  - **Tenant/User/Role Administrators:** My tenant
+  - **Service Administrators:** Tenants, RabbitMQ Management (auto-login), Event logs, Audit logs
+- **RabbitMQ Management:** Service Administrators get a side-nav link that opens RabbitMQ Management with credentials automatically supplied (no manual login)
+- See [BoilerPlate.Frontend/README.md](../BoilerPlate.Frontend/README.md) for full access documentation
+
 ### Web API
 
 - **API Base URL:** http://localhost:8080
@@ -734,9 +745,9 @@ docker exec -it postgres-auth psql -U boilerplate -d BoilerPlateAuth
 
 ### RabbitMQ Management Dashboard
 
-- **URL:** http://localhost:15672
-- **Username:** admin
-- **Password:** SecurePassword123!
+- **Direct URL:** http://localhost:15672
+- **Via frontend:** Service Administrators can use the "RabbitMQ Management" link in the side nav for automatic login (no credentials needed)
+- **Manual login:** Username `admin`, Password `SecurePassword123!`
 
 ### MongoDB
 

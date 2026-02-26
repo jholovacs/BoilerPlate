@@ -15,12 +15,12 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
 .back-link {
-  color: #667eea;
+  color: var(--primary);
   text-decoration: none;
   font-size: 14px;
   cursor: pointer;
@@ -31,7 +31,7 @@
 }
 
 .hint {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   margin-bottom: 16px;
 }
@@ -49,7 +49,7 @@
 .empty-state {
   padding: 24px;
   text-align: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .table {
@@ -61,13 +61,13 @@
 .table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .table th {
   font-weight: 600;
-  color: #555;
-  background: #f9f9f9;
+  color: var(--text-secondary);
+  background: var(--bg-table-header-alt);
 }
 
 .badge {
@@ -79,11 +79,11 @@
 }
 
 .badge-system {
-  background: #e8f4fd;
-  color: #1976d2;
+  background: var(--badge-system-bg);
+  color: var(--badge-system-color);
 }
 
 .badge-custom {
-  background: #f5f5f5;
-  color: #666;
+  background: var(--bg-nav-hover);
+  color: var(--text-secondary);
 }

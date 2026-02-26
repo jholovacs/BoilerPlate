@@ -14,7 +14,7 @@
 }
 
 .back-link {
-  color: #667eea;
+  color: var(--primary);
   text-decoration: none;
   font-size: 14px;
 }
@@ -25,7 +25,7 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
@@ -36,7 +36,7 @@
 }
 
 .tenant-subnav .nav-link {
-  color: #667eea;
+  color: var(--primary);
   text-decoration: none;
   font-size: 14px;
 }
@@ -49,7 +49,7 @@
   display: flex;
   gap: 4px;
   margin-bottom: 0;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-color);
   padding-bottom: 0;
 }
 
@@ -57,7 +57,7 @@
   padding: 12px 20px;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -66,12 +66,12 @@
 }
 
 .tab-btn:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 
 .tab-content {
@@ -86,24 +86,24 @@
 .tab-panel h2 {
   margin: 0 0 20px 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .hint {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin: 4px 0 16px 0;
 }
 
 .system-tenant-banner {
-  background: #f5f5f5;
-  border-left: 4px solid #999;
+  background: var(--bg-nav-hover);
+  border-left: 4px solid var(--text-muted);
   padding: 12px 16px;
   margin-bottom: 16px;
 }
 
 .form-section {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 20px;
@@ -112,7 +112,7 @@
 .form-section legend {
   padding: 0 8px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .form-actions {
@@ -137,9 +137,11 @@
   flex: 1;
   min-width: 120px;
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .add-row {
@@ -153,17 +155,21 @@
   flex: 1;
   min-width: 140px;
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .inline-input {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .btn-sm {
@@ -172,11 +178,11 @@
 }
 
 .status-active {
-  color: #27ae60;
+  color: var(--success);
   font-weight: 600;
 }
 
 .status-inactive {
-  color: #e74c3c;
+  color: var(--error);
   font-weight: 600;
 }

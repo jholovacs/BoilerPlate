@@ -13,7 +13,7 @@
       <a routerLink="/tenants" routerLinkActive="active" class="nav-item">Tenants</a>
     </li>
     <li *ngIf="authService.isServiceAdministrator()">
-      <a href="http://localhost:15672/" target="_blank" rel="noopener noreferrer" class="nav-item">RabbitMQ Management</a>
+      <a href="#" class="nav-item" (click)="openRabbitMq($event)">RabbitMQ Management</a>
     </li>
     <li *ngIf="authService.canAccessDiagnostics()">
       <a routerLink="/event-logs" routerLinkActive="active" class="nav-item">Event logs</a>

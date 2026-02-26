@@ -10,7 +10,7 @@ import { AuthService } from '../../../core/services/auth.service';
   selector: 'app-my-tenant-settings',
   standalone: true,
   template: '<p class="loading">Redirecting to your tenant settings...</p>',
-  styles: ['.loading { padding: 24px; text-align: center; color: #666; }']
+  styles: ['.loading { padding: 24px; text-align: center; color: var(--text-secondary); }']
 })
 export class MyTenantSettingsComponent implements OnInit {
   private router = inject(Router);

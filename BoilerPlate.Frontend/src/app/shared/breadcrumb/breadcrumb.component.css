@@ -5,11 +5,11 @@
   gap: 6px 0;
   font-size: 14px;
   margin-bottom: 16px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .breadcrumb a {
-  color: #667eea;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -18,11 +18,11 @@
 }
 
 .breadcrumb .current {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .breadcrumb .separator {
   margin: 0 6px;
-  color: #999;
+  color: var(--text-muted);
 }

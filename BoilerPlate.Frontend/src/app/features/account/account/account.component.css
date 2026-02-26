@@ -9,13 +9,13 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
 .intro {
   margin: 0 0 20px 0;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .account-info {
@@ -30,7 +30,7 @@
 
 .info-row .label {
   font-weight: 500;
-  color: #555;
+  color: var(--text-secondary);
   min-width: 100px;
 }
 

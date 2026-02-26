@@ -26,12 +26,12 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
 .back-link {
-  color: #667eea;
+  color: var(--primary);
   cursor: pointer;
   font-size: 14px;
 }
@@ -49,18 +49,18 @@
 .section-divider {
   margin: 28px 0;
   border: none;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }
 
 .section-divider + h2 {
   margin: 0 0 8px 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .hint {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
@@ -86,7 +86,9 @@ select {
   width: 100%;
   max-width: 320px;
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }

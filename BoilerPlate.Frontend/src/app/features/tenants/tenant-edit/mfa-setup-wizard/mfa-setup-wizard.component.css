@@ -12,7 +12,7 @@
 
 .wizard-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 20px;
 }
 
@@ -27,8 +27,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #e0e0e0;
-  color: #666;
+  background: var(--secondary-bg);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,24 +38,24 @@
 }
 
 .step-indicator.active {
-  background: #667eea;
-  color: white;
+  background: var(--primary);
+  color: var(--text-inverse);
 }
 
 .step-indicator.done {
-  background: #27ae60;
-  color: white;
+  background: var(--success);
+  color: var(--text-inverse);
 }
 
 .step-line {
   width: 48px;
   height: 3px;
-  background: #e0e0e0;
+  background: var(--secondary-bg);
   flex-shrink: 0;
 }
 
 .step-line.done {
-  background: #27ae60;
+  background: var(--success);
 }
 
 .wizard-step {
@@ -65,14 +65,14 @@
 .wizard-step h3 {
   margin: 0 0 8px 0;
   font-size: 15px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .wizard-step h3 + p,
 .wizard-step p {
   margin: 0 0 12px 0;
   font-size: 14px;
-  color: #555;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -82,7 +82,7 @@
 
 .wizard-hint {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 12px;
 }
 
@@ -104,8 +104,8 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #27ae60;
-  color: white;
+  background: var(--success);
+  color: var(--text-inverse);
   font-size: 24px;
   font-weight: bold;
   display: flex;
@@ -120,11 +120,11 @@
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }
 
 .error-message {
   margin-top: 12px;
   font-size: 13px;
-  color: #e74c3c;
+  color: var(--error);
 }

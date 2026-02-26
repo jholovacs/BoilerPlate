@@ -151,17 +151,17 @@ export interface Tenant {
     }
 
     .header h1 {
-      color: #333;
+      color: var(--text-primary);
       margin: 0;
     }
 
     .status-active {
-      color: #27ae60;
+      color: var(--success);
       font-weight: 600;
     }
 
     .status-inactive {
-      color: #e74c3c;
+      color: var(--error);
       font-weight: 600;
     }
 

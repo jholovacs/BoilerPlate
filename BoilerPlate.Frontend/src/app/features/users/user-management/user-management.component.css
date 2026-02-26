@@ -15,7 +15,7 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
@@ -26,7 +26,7 @@
 }
 
 .nav-link {
-  color: #667eea;
+  color: var(--primary);
   text-decoration: none;
   font-size: 14px;
 }
@@ -58,17 +58,21 @@
 .search-input {
   min-width: 220px;
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .tenant-select {
   padding: 10px 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   font-size: 14px;
   min-width: 180px;
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .table {
@@ -80,13 +84,13 @@
 .table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .table th {
   font-weight: 600;
-  color: #555;
-  background: #f9f9f9;
+  color: var(--text-secondary);
+  background: var(--bg-table-header-alt);
 }
 
 .btn-sm {
@@ -95,11 +99,11 @@
 }
 
 .status-active {
-  color: #27ae60;
+  color: var(--success);
   font-weight: 600;
 }
 
 .status-inactive {
-  color: #e74c3c;
+  color: var(--error);
   font-weight: 600;
 }
