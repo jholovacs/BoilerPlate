@@ -21,5 +21,8 @@
     <li *ngIf="authService.canAccessDiagnostics()">
       <a routerLink="/audit-logs" routerLinkActive="active" class="nav-item">Audit logs</a>
     </li>
+    <li *ngIf="authService.canAccessDiagnostics()">
+      <a routerLink="/metrics" routerLinkActive="active" class="nav-item">Metrics</a>
+    </li>
   </ul>
 </nav>

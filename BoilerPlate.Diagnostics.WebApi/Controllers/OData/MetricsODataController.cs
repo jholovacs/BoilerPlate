@@ -28,7 +28,7 @@ public class MetricsODataController : ODataController
     /// <summary>
     ///     Get metric points with OData query support. Filtered by tenant when user is not a Service Administrator.
     /// </summary>
-    [EnableQuery(MaxTop = 1000, PageSize = 200)]
+    [EnableQuery(MaxTop = 2500, PageSize = 200)]
     [HttpGet("Metrics")]
     public IActionResult Get()
     {

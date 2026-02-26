@@ -1,0 +1,70 @@
+<div class="container">
+  <div class="header">
+    <h1>Metrics Dashboard</h1>
+    <button class="btn btn-secondary" (click)="logout()">Logout</button>
+  </div>
+
+  <div class="card">
+    <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+    <div *ngIf="isLoading" class="loading">Loading metrics...</div>
+
+    <div *ngIf="!isLoading && !errorMessage">
+      <p class="intro">System health and request metrics from the Auth API. Data refreshes every 15 seconds.</p>
+
+      <div class="summary-cards">
+        <div class="summary-card">
+          <span class="summary-label">Total Requests</span>
+          <span class="summary-value">{{ summary.totalRequests | number }}</span>
+        </div>
+        <div class="summary-card">
+          <span class="summary-label">Avg Duration</span>
+          <span class="summary-value">{{ summary.avgDurationMs | number:'1.0-0' }} ms</span>
+        </div>
+        <div class="summary-card" [class.has-errors]="summary.errorCount > 0">
+          <span class="summary-label">Errors</span>
+          <span class="summary-value">{{ summary.errorCount | number }}</span>
+          <span class="summary-sublabel" *ngIf="summary.totalRequests > 0">({{ summary.errorRate | number:'1.1-1' }}%)</span>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <h3>Requests by Route (top 10)</h3>
+          <div class="chart-container">
+            <canvas #byRouteChart></canvas>
+          </div>
+          <p class="chart-hint" *ngIf="routeStats.length === 0">No request metrics yet. Traffic will appear here.</p>
+        </div>
+        <div class="chart-card">
+          <h3>Response Status</h3>
+          <div class="chart-container chart-doughnut">
+            <canvas #byStatusChart></canvas>
+          </div>
+          <p class="chart-hint" *ngIf="statusBreakdown.length === 0">No status breakdown yet.</p>
+        </div>
+      </div>
+
+      <div class="route-table" *ngIf="routeStats.length > 0">
+        <h3>Route Details</h3>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Requests</th>
+              <th>Errors</th>
+              <th>Avg Duration (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of routeStats">
+              <td class="col-route">{{ r.route }}</td>
+              <td>{{ r.count | number }}</td>
+              <td [class.has-errors]="r.errors > 0">{{ r.errors | number }}</td>
+              <td>{{ r.avgDurationMs | number:'1.0-0' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

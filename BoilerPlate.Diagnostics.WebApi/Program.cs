@@ -64,7 +64,7 @@ builder.Services.AddControllers()
         .OrderBy()
         .Expand()
         .Count()
-        .SetMaxTop(500)
+        .SetMaxTop(2500)
         .AddRouteComponents("odata", ODataConfiguration.GetEdmModel()));
 
 builder.Services.AddEndpointsApiExplorer();

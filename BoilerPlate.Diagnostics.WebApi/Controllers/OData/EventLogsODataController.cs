@@ -18,7 +18,7 @@ namespace BoilerPlate.Diagnostics.WebApi.Controllers.OData;
 [Route("odata")]
 public class EventLogsODataController : ODataController
 {
-    private const int MaxTop = 500;
+    private const int MaxTop = 2500;
     private const int DefaultPageSize = 100;
 
     private readonly IEventLogsRawQueryService _rawQueryService;
