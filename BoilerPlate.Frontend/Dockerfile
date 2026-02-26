@@ -15,6 +15,9 @@ RUN npm install
 # Copy source files
 COPY BoilerPlate.Frontend/src ./src
 
+# Copy build scripts (generate-build-info.js for versioning)
+COPY BoilerPlate.Frontend/scripts ./scripts
+
 # Build the application (increase Node memory for faster builds)
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build

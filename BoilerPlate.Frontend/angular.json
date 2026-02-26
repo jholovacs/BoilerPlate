@@ -28,6 +28,11 @@
                 "glob": "version.json",
                 "input": ".",
                 "output": "/"
+              },
+              {
+                "glob": "components.json",
+                "input": ".",
+                "output": "/"
               }
             ],
             "styles": [

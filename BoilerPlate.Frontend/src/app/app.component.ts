@@ -26,13 +26,14 @@ import { SideNavComponent } from './shared/side-nav/side-nav.component';
     .app-root { min-height: 100vh; }
     .app-layout {
       display: flex;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
       align-items: stretch;
     }
     .main-content {
       flex: 1;
       min-width: 0;
-      min-height: 100%;
+      overflow-y: auto;
       background: var(--bg-body);
     }
   `]

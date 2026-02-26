@@ -1,0 +1,23 @@
+<div class="side-nav-footer">
+  <button type="button" class="version-summary" (click)="toggleExpanded()" [attr.aria-expanded]="expanded" aria-label="Version and third-party components">
+    <span class="version-text">
+      v{{ version.appVersion || '?' }}
+      <span *ngIf="version.buildId" class="build-id">({{ version.buildId }})</span>
+    </span>
+    <span class="components-count">{{ componentsData.components.length }} components</span>
+    <span class="expand-icon">{{ expanded ? '▼' : '▶' }}</span>
+  </button>
+  <div class="components-panel" *ngIf="expanded">
+    <div class="components-header">
+      <strong>Third-party components</strong>
+      <span class="build-time" *ngIf="version.buildTime">Build: {{ formatBuildTime(version.buildTime) }}</span>
+    </div>
+    <ul class="components-list">
+      <li *ngFor="let c of componentsData.components" class="component-item">
+        <span class="component-name">{{ c.name }}</span>
+        <span class="component-version">{{ c.version }}</span>
+        <span class="component-license" *ngIf="c.license">{{ c.license }}</span>
+      </li>
+    </ul>
+  </div>
+</div>

@@ -1,28 +1,31 @@
 <nav class="side-nav" aria-label="Feature navigation" *ngIf="authService.isAuthenticated()">
-  <ul class="nav-list">
-    <li>
-      <a routerLink="/account" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">Account</a>
-    </li>
-    <li>
-      <a routerLink="/account/change-password" routerLinkActive="active" class="nav-item">Change password</a>
-    </li>
-    <li *ngIf="authService.canManageUsers() || authService.canManageRoles()">
-      <a routerLink="/my-tenant/settings" routerLinkActive="active" class="nav-item">My tenant</a>
-    </li>
-    <li *ngIf="authService.isServiceAdministrator()">
-      <a routerLink="/tenants" routerLinkActive="active" class="nav-item">Tenants</a>
-    </li>
-    <li *ngIf="authService.isServiceAdministrator()">
-      <a routerLink="/rabbitmq-queues" routerLinkActive="active" class="nav-item">RabbitMQ Queues</a>
-    </li>
-    <li *ngIf="authService.canAccessDiagnostics()">
-      <a routerLink="/event-logs" routerLinkActive="active" class="nav-item">Event logs</a>
-    </li>
-    <li *ngIf="authService.canAccessDiagnostics()">
-      <a routerLink="/audit-logs" routerLinkActive="active" class="nav-item">Audit logs</a>
-    </li>
-    <li *ngIf="authService.canAccessDiagnostics()">
-      <a routerLink="/metrics" routerLinkActive="active" class="nav-item">Metrics</a>
-    </li>
-  </ul>
+  <div class="nav-wrapper">
+    <ul class="nav-list">
+      <li>
+        <a routerLink="/account" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">Account</a>
+      </li>
+      <li>
+        <a routerLink="/account/change-password" routerLinkActive="active" class="nav-item">Change password</a>
+      </li>
+      <li *ngIf="authService.canManageUsers() || authService.canManageRoles()">
+        <a routerLink="/my-tenant/settings" routerLinkActive="active" class="nav-item">My tenant</a>
+      </li>
+      <li *ngIf="authService.isServiceAdministrator()">
+        <a routerLink="/tenants" routerLinkActive="active" class="nav-item">Tenants</a>
+      </li>
+      <li *ngIf="authService.isServiceAdministrator()">
+        <a routerLink="/rabbitmq-queues" routerLinkActive="active" class="nav-item">RabbitMQ Queues</a>
+      </li>
+      <li *ngIf="authService.canAccessDiagnostics()">
+        <a routerLink="/event-logs" routerLinkActive="active" class="nav-item">Event logs</a>
+      </li>
+      <li *ngIf="authService.canAccessDiagnostics()">
+        <a routerLink="/audit-logs" routerLinkActive="active" class="nav-item">Audit logs</a>
+      </li>
+      <li *ngIf="authService.canAccessDiagnostics()">
+        <a routerLink="/metrics" routerLinkActive="active" class="nav-item">Metrics</a>
+      </li>
+    </ul>
+    <app-side-nav-footer />
+  </div>
 </nav>

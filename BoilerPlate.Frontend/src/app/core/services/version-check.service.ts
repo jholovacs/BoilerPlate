@@ -6,7 +6,9 @@ import { catchError } from 'rxjs/operators';
 const VERSION_URL = '/version.json';
 const STORAGE_KEY = 'app_build_time';
 
-interface VersionPayload {
+export interface VersionPayload {
+  appVersion?: string;
+  buildId?: string;
   buildTime?: number;
   version?: string;
 }
@@ -31,7 +33,7 @@ export class VersionCheckService {
           catchError(() => of(null))
         )
       );
-      const buildTime = body?.buildTime ?? body?.version ?? null;
+      const buildTime = body?.buildTime ?? body?.buildId ?? body?.version ?? null;
       const buildKey = String(buildTime);
       const stored = sessionStorage.getItem(STORAGE_KEY);
       if (stored != null && stored !== buildKey) {
