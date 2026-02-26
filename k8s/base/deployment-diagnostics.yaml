@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diagnostics
+  namespace: boilerplate
+  labels:
+    app: diagnostics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: diagnostics
+  template:
+    metadata:
+      labels:
+        app: diagnostics
+    spec:
+      containers:
+        - name: diagnostics
+          image: boilerplate-diagnostics-webapi:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_URLS
+              value: http://+:8080
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: jwt-public-key
+            - name: JWT_ISSUER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: jwt-issuer-url
+            - name: JwtSettings__Issuer
+              value: BoilerPlate.Authentication
+            - name: JwtSettings__Audience
+              value: BoilerPlate.API
+            - name: MONGODB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: mongodb-connection
+            - name: RABBITMQ_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: rabbitmq-connection
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4317
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diagnostics
+  namespace: boilerplate
+spec:
+  selector:
+    app: diagnostics
+  ports:
+    - port: 8080
+      targetPort: 8080

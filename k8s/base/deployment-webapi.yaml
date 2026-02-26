@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapi
+  namespace: boilerplate
+  labels:
+    app: webapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webapi
+  template:
+    metadata:
+      labels:
+        app: webapi
+    spec:
+      containers:
+        - name: webapi
+          image: boilerplate-authentication-webapi:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ConnectionStrings__PostgreSqlConnection
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: postgres-connection
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: jwt-private-key
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: jwt-public-key
+            - name: JWT_EXPIRATION_MINUTES
+              value: "60"
+            - name: RABBITMQ_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: rabbitmq-connection
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4317
+            - name: ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: admin-username
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: admin-password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapi
+  namespace: boilerplate
+spec:
+  selector:
+    app: webapi
+  ports:
+    - port: 8080
+      targetPort: 8080

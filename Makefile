@@ -1,4 +1,4 @@
-.PHONY: help setup setup-keys setup-tls-certs setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-event-logs-image rebuild-event-logs-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-event-logs rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-event-logs docker-logs-diagnostics docker-logs-frontend clean verify test
+.PHONY: help setup setup-keys setup-tls-certs setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-event-logs-image rebuild-event-logs-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-event-logs rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-event-logs docker-logs-diagnostics docker-logs-frontend clean verify test setup-production migrate-production docker-up-production verify-prereqs
 
 # Project root (avoids getcwd failures in WSL when cwd becomes invalid)
 # Allow override: make setup PROJECT_ROOT=/mnt/d/Code/BoilerPlate
@@ -167,7 +167,38 @@ setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes e
 	@echo "  2. Access the app at https://localhost:4200 (accept the self-signed cert when prompted)"
 	@echo "  3. All services are now running and ready to use!"
 
-verify-prerequisites: ## Verify required tools are installed
+# --- Production targets (single-port, locked down) ---
+# See PRODUCTION_HARDENING.md for full guide.
+
+setup-production: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project migrate-production rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-production ## Production setup: single-port (443), no internal ports exposed
+	@echo "$(GREEN)$(OK) Production setup complete!$(NC)"
+	@echo ""
+	@echo "$(YELLOW)HTTPS on port 443. Ensure JWT_ISSUER_URL in .env matches your public URL.$(NC)"
+	@echo "$(YELLOW)Replace tls-certs/ with trusted certs (Let's Encrypt or CA) for production.$(NC)"
+
+migrate-production: ensure-services ## Run migrations for production (postgres must be reachable; ensure-services starts it with port 5432)
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Running migrations (production)...$(NC)"
+	@cd "$(PROJECT_ROOT)" && if ! PATH="$$HOME/.dotnet/tools:$$PATH" dotnet ef --version > /dev/null 2>&1; then \
+		echo "$(YELLOW)  $(WARN) dotnet-ef not found. Install: dotnet tool install --global dotnet-ef$(NC)"; \
+		exit 0; \
+	fi
+	@cd "$(PROJECT_ROOT)" && PATH="$$HOME/.dotnet/tools:$$PATH" PGPASSWORD="$(POSTGRES_PASSWORD)" ConnectionStrings__PostgreSqlConnection="Host=localhost;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>&1 | sed '/MONGODB_CONNECTION_STRING/d' || true
+	@echo "$(GREEN)  Migrations complete (run docker-up-production to start with locked-down ports)$(NC)"
+
+docker-up-production: ## Start all services with production override (single port 443)
+	@cd "$(PROJECT_ROOT)" && if command -v docker-compose > /dev/null 2>&1; then \
+		docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d 2>&1; \
+	elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+		docker compose -f docker-compose.yml -f docker-compose.production.yml up -d 2>&1; \
+	else \
+		echo "$(RED)$(FAIL) Docker Compose not found$(NC)" && exit 1; \
+	fi
+	@echo "$(GREEN)$(OK) Production services started. HTTPS on port 443.$(NC)"
+
+verify-prereqs: ## Check prerequisites for deployment (run before install). Usage: make verify-prereqs [MODE=docker|docker-production|k8s]
+	@cd "$(PROJECT_ROOT)" && ./verify-prerequisites.sh $(or $(MODE),docker)
+
+verify-prerequisites: ## Verify required tools are installed (used by make setup)
 	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Verifying prerequisites...$(NC)"
 	@cd "$(PROJECT_ROOT)" && which openssl > /dev/null 2>&1 || (echo "$(RED)$(FAIL) OpenSSL is not installed. Please install it first.$(NC)" && exit 1)
 	@which docker > /dev/null 2>&1 || (echo "$(RED)$(FAIL) Docker is not installed. Please install Docker Desktop first.$(NC)" && exit 1)

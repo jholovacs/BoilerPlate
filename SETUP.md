@@ -4,17 +4,14 @@ This guide provides the fastest way to set up the BoilerPlate Authentication pro
 
 ## Prerequisites
 
+Run **`./verify-prerequisites.sh docker`** to check all prerequisites. It prints install commands for anything missing.
+
 - **OpenSSL** - For generating JWT keys
-  - Windows: Download from [Win32OpenSSL](https://slproweb.com/products/Win32OpenSSL.html) or use `choco install openssl`
-  - macOS: `brew install openssl` or comes pre-installed
-  - Linux: `sudo apt-get install openssl` or `sudo yum install openssl`
-
 - **Docker Desktop** - For running services
-  - Download from [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- **.NET SDK 8.0+** - For migrations
+- **Make** - For Unix (Windows: use `setup.ps1`)
 
-- **Make** (optional) - For Unix-like systems (macOS/Linux)
-  - macOS: Comes pre-installed or `xcode-select --install`
-  - Linux: `sudo apt-get install build-essential` or `sudo yum install make`
+See [PREREQUISITES.md](PREREQUISITES.md) for install commands by platform.
 
 ## Quick Start
 
@@ -45,6 +42,10 @@ This performs the same setup as the Makefile.
 ### Option 3: Manual Setup
 
 If you prefer to set up manually, see the [DOCKER_STARTUP_GUIDE.md](DOCKER_STARTUP_GUIDE.md) for detailed instructions.
+
+### Production Deployment
+
+For production hardening (trusted certificates, port lockdown, single-port deployment), see [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md).
 
 ## Available Makefile Commands
 

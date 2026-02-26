@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: boilerplate
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          args:
+            - --config=/etc/otel-collector-config/config.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel-collector-config
+            - name: data
+              mountPath: /var/lib/otel-collector
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: otel-collector-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: boilerplate
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318

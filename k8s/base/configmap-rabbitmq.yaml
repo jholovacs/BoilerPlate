@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: boilerplate
+data:
+  rabbitmq.conf: |
+    auth_backends.1 = rabbit_auth_backend_internal
+  enabled_plugins: |
+    [rabbitmq_management].

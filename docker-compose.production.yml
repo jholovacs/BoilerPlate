@@ -1,0 +1,52 @@
+# Production override: single-port deployment, no internal service ports exposed.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+#
+# Prerequisites:
+#   - .env with JWT keys, strong passwords, JWT_ISSUER_URL
+#   - TLS certs at tls-certs/cert.pem and tls-certs/key.pem (or set TLS_CERT_PATH, TLS_KEY_PATH)
+
+services:
+  postgres:
+    ports: []  # No host port - internal only
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecurePassword123!}
+
+  rabbitmq:
+    ports: []  # No host port - access via frontend /rabbitmq-queues or /amqp proxy
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}
+
+  mongodb:
+    ports: []
+    environment:
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-SecurePassword123!}
+
+  frontend:
+    ports:
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ${TLS_CERT_PATH:-./tls-certs/cert.pem}:/etc/nginx/ssl/cert.pem:ro
+      - ${TLS_KEY_PATH:-./tls-certs/key.pem}:/etc/nginx/ssl/key.pem:ro
+
+  webapi:
+    environment:
+      ConnectionStrings__PostgreSqlConnection: Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD:-SecurePassword123!}
+      RABBITMQ_CONNECTION_STRING: amqp://admin:${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}@rabbitmq:5672/
+      JWT_ISSUER_URL: ${JWT_ISSUER_URL:-https://localhost}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-AdminPassword123!}
+
+  audit:
+    environment:
+      MONGODB_CONNECTION_STRING: mongodb://admin:${MONGO_INITDB_ROOT_PASSWORD:-SecurePassword123!}@mongodb:27017/logs?authSource=admin
+      RABBITMQ_CONNECTION_STRING: amqp://admin:${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}@rabbitmq:5672/
+
+  event-logs:
+    environment:
+      MONGODB_CONNECTION_STRING: mongodb://admin:${MONGO_INITDB_ROOT_PASSWORD:-SecurePassword123!}@mongodb:27017/logs?authSource=admin
+      RABBITMQ_CONNECTION_STRING: amqp://admin:${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}@rabbitmq:5672/
+
+  diagnostics:
+    environment:
+      MONGODB_CONNECTION_STRING: mongodb://admin:${MONGO_INITDB_ROOT_PASSWORD:-SecurePassword123!}@mongodb:27017/logs?authSource=admin
+      RABBITMQ_CONNECTION_STRING: amqp://admin:${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}@rabbitmq:5672/
+      JWT_ISSUER_URL: ${JWT_ISSUER_URL:-https://localhost}

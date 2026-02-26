@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: boilerplate
+
+resources:
+  - namespace.yaml
+  - configmap-otel-collector.yaml
+  - configmap-rabbitmq.yaml
+  - configmap-frontend-nginx.yaml
+  - pvc-postgres.yaml
+  - deployment-postgres.yaml
+  - deployment-rabbitmq.yaml
+  - deployment-mongodb.yaml
+  - deployment-otel-collector.yaml
+  - deployment-webapi.yaml
+  - deployment-audit.yaml
+  - deployment-event-logs.yaml
+  - deployment-diagnostics.yaml
+  - deployment-frontend.yaml
+  - ingress.yaml
+
+images:
+  - name: boilerplate-authentication-webapi:latest
+    newName: boilerplate-authentication-webapi
+    newTag: latest
+  - name: boilerplate-services-audit:latest
+    newName: boilerplate-services-audit
+    newTag: latest
+  - name: boilerplate-services-event-logs:latest
+    newName: boilerplate-services-event-logs
+    newTag: latest
+  - name: boilerplate-diagnostics-webapi:latest
+    newName: boilerplate-diagnostics-webapi
+    newTag: latest
+  - name: boilerplate-frontend:latest
+    newName: boilerplate-frontend
+    newTag: latest

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-logs
+  namespace: boilerplate
+  labels:
+    app: event-logs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-logs
+  template:
+    metadata:
+      labels:
+        app: event-logs
+    spec:
+      containers:
+        - name: event-logs
+          image: boilerplate-services-event-logs:latest
+          env:
+            - name: MONGODB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: mongodb-connection
+            - name: RABBITMQ_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: rabbitmq-connection
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-logs
+  namespace: boilerplate
+spec:
+  selector:
+    app: event-logs
+  ports:
+    - port: 8080
+      targetPort: 8080
