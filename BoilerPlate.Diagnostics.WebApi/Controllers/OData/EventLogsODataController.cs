@@ -1,21 +1,18 @@
 using System.Text.RegularExpressions;
-using BoilerPlate.Diagnostics.Database;
 using BoilerPlate.Diagnostics.Database.Entities;
 using BoilerPlate.Diagnostics.EventLogs.MongoDb.Services;
 using BoilerPlate.Diagnostics.WebApi.Configuration;
 using BoilerPlate.Diagnostics.WebApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.OData.Formatter;
 using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.EntityFrameworkCore;
 
 namespace BoilerPlate.Diagnostics.WebApi.Controllers.OData;
 
 /// <summary>
 ///     Read-only OData controller for event logs. Service Administrators see all; others see only logs for their tenant (via Properties.tenantId).
-///     Uses EF for Service Admin; raw MongoDB for tenant-filtered queries (Properties is BsonDocument, not supported by EF).
+///     Uses raw MongoDB with deduplication (same log can be written multiple times).
 /// </summary>
 [Authorize(Policy = AuthorizationPolicies.DiagnosticsODataAccess)]
 [Route("odata")]
@@ -24,23 +21,19 @@ public class EventLogsODataController : ODataController
     private const int MaxTop = 500;
     private const int DefaultPageSize = 100;
 
-    private readonly BaseEventLogDbContext _context;
     private readonly IEventLogsRawQueryService _rawQueryService;
     private readonly ILogger<EventLogsODataController> _logger;
 
     public EventLogsODataController(
-        BaseEventLogDbContext context,
         IEventLogsRawQueryService rawQueryService,
         ILogger<EventLogsODataController> logger)
     {
-        _context = context;
         _rawQueryService = rawQueryService;
         _logger = logger;
     }
 
     /// <summary>
     ///     Get event logs with OData query support. Filtered by tenant when user is not a Service Administrator.
-    ///     Service Admin: EF Core. Tenant Admin: raw MongoDB (Properties.tenantId).
     /// </summary>
     [HttpGet("EventLogs")]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
@@ -58,27 +51,17 @@ public class EventLogsODataController : ODataController
 
             var (tenantId, useRawQuery) = GetTenantFilter();
 
-            if (useRawQuery)
+            // Always use raw query: includes deduplication (same log written multiple times).
+            // Tenant Admin: tenantId set. Service Admin: tenantId null (no tenant filter).
+            if (useRawQuery && !tenantId.HasValue)
             {
-                if (!tenantId.HasValue)
-                {
-                    return Ok(CreateODataResponse(new List<EventLogEntry>(), 0));
-                }
-                ParseFilter(filter, out var levelFilter, out var messageContains);
-                var orderByDesc = ParseOrderByDesc(orderBy);
-                var (results, rawCount) = await _rawQueryService.QueryAsync(
-                    tenantId, levelFilter, messageContains, orderByDesc, top, skip, includeCount, cancellationToken);
-                return Ok(CreateODataResponse(results, rawCount));
+                return Ok(CreateODataResponse(new List<EventLogEntry>(), 0));
             }
-
-            var query = _context.EventLogs.AsQueryable();
-            query = ApplyManualFilter(query, filter);
-            long? efCount = null;
-            if (includeCount)
-                efCount = await query.LongCountAsync(cancellationToken);
-            query = ApplyManualOrderBy(query, orderBy);
-            var efResults = await query.Skip(skip).Take(top).ToListAsync(cancellationToken);
-            return Ok(CreateODataResponse(efResults, efCount));
+            ParseFilter(filter, out var levelFilter, out var messageContains);
+            var orderByDesc = ParseOrderByDesc(orderBy);
+            var (results, rawCount) = await _rawQueryService.QueryAsync(
+                tenantId, levelFilter, messageContains, orderByDesc, top, skip, includeCount, cancellationToken);
+            return Ok(CreateODataResponse(results, rawCount));
         }
         catch (Exception ex)
         {
@@ -94,14 +77,9 @@ public class EventLogsODataController : ODataController
     public async Task<IActionResult> Get([FromODataUri] long key, CancellationToken cancellationToken)
     {
         var (tenantId, useRawQuery) = GetTenantFilter();
-        if (useRawQuery)
-        {
-            if (!tenantId.HasValue) return NotFound();
-            var entry = await _rawQueryService.GetByIdAsync(key, tenantId, cancellationToken);
-            return entry == null ? NotFound() : Ok(entry);
-        }
-        var efEntry = await _context.EventLogs.FirstOrDefaultAsync(e => e.Id == key, cancellationToken);
-        return efEntry == null ? NotFound() : Ok(efEntry);
+        if (useRawQuery && !tenantId.HasValue) return NotFound();
+        var entry = await _rawQueryService.GetByIdAsync(key, tenantId, cancellationToken);
+        return entry == null ? NotFound() : Ok(entry);
     }
 
     /// <summary>
@@ -135,54 +113,6 @@ public class EventLogsODataController : ODataController
         if (!m.Success) return true;
         var desc = string.IsNullOrEmpty(m.Groups[2].Value) || string.Equals(m.Groups[2].Value, "desc", StringComparison.OrdinalIgnoreCase);
         return desc;
-    }
-
-    /// <summary>
-    ///     Parses OData $filter and applies MongoDB-compatible LINQ. Supports: Level eq 'X', contains(Message, 'Y'), and combinations.
-    /// </summary>
-    private static IQueryable<EventLogEntry> ApplyManualFilter(IQueryable<EventLogEntry> query, string? filter)
-    {
-        if (string.IsNullOrWhiteSpace(filter)) return query;
-
-        // Level eq 'Verbose' or Level eq "Verbose"
-        var levelMatch = Regex.Match(filter, @"Level\s+eq\s+['""]([^'""]+)['""]", RegexOptions.IgnoreCase);
-        if (levelMatch.Success)
-        {
-            var level = levelMatch.Groups[1].Value.Replace("''", "'");
-            query = query.Where(e => e.Level == level);
-        }
-
-        // contains(Message, 'term') or contains(Message, "term")
-        var containsMatch = Regex.Match(filter, @"contains\s*\(\s*Message\s*,\s*['""]([^'""]*)['""]\s*\)", RegexOptions.IgnoreCase);
-        if (containsMatch.Success)
-        {
-            var term = containsMatch.Groups[1].Value.Replace("''", "'");
-            query = query.Where(e => e.Message != null && e.Message.Contains(term));
-        }
-
-        return query;
-    }
-
-    /// <summary>
-    ///     Parses OData $orderby and applies. Supports: Timestamp desc, Timestamp asc (default: Timestamp desc).
-    /// </summary>
-    private static IQueryable<EventLogEntry> ApplyManualOrderBy(IQueryable<EventLogEntry> query, string? orderBy)
-    {
-        if (string.IsNullOrWhiteSpace(orderBy)) return query.OrderByDescending(e => e.Timestamp);
-
-        var m = Regex.Match(orderBy.Trim(), @"(\w+)\s+(asc|desc)?", RegexOptions.IgnoreCase);
-        if (!m.Success) return query.OrderByDescending(e => e.Timestamp);
-
-        var prop = m.Groups[1].Value;
-        var desc = string.IsNullOrEmpty(m.Groups[2].Value) || string.Equals(m.Groups[2].Value, "desc", StringComparison.OrdinalIgnoreCase);
-
-        return prop.ToLowerInvariant() switch
-        {
-            "timestamp" => desc ? query.OrderByDescending(e => e.Timestamp) : query.OrderBy(e => e.Timestamp),
-            "level" => desc ? query.OrderByDescending(e => e.Level) : query.OrderBy(e => e.Level),
-            "message" => desc ? query.OrderByDescending(e => e.Message) : query.OrderBy(e => e.Message),
-            _ => query.OrderByDescending(e => e.Timestamp)
-        };
     }
 
     private static object CreateODataResponse(List<EventLogEntry> value, long? count)

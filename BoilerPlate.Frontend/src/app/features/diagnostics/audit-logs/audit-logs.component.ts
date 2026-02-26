@@ -4,13 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuditLogsService, AuditLogEntry } from '../../../core/services/audit-logs.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { EntityIdsPipe } from '../event-logs/entity-id.pipe';
 
 const PAGE_SIZE = 50;
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, EntityIdsPipe],
   templateUrl: './audit-logs.component.html',
   styleUrl: './audit-logs.component.css'
 })
@@ -122,6 +123,57 @@ export class AuditLogsComponent implements OnInit {
     if (!value) return '-';
     if (value.length <= maxLen) return value;
     return value.slice(0, maxLen) + '…';
+  }
+
+  /** Modal for viewing full text with copy */
+  modalVisible = false;
+  modalContent = '';
+  modalTitle = '';
+  copyFeedback = false;
+
+  openModal(content: string, title: string): void {
+    this.modalContent = content || '';
+    this.modalTitle = title;
+    this.modalVisible = true;
+    this.copyFeedback = false;
+  }
+
+  closeModal(): void {
+    this.modalVisible = false;
+  }
+
+  async copyToClipboard(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.modalContent);
+      this.copyFeedback = true;
+      setTimeout(() => (this.copyFeedback = false), 2000);
+    } catch {
+      this.copyFeedback = false;
+    }
+  }
+
+  /** Pretty-print JSON for display; returns as-is if not valid JSON */
+  formatEventData(data: string | undefined): string {
+    if (!data?.trim()) return '';
+    try {
+      const parsed = JSON.parse(data);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return data;
+    }
+  }
+
+  /** Short preview of event data for table cell */
+  eventDataPreview(log: AuditLogEntry): string {
+    const raw = this.getLogValue(log, 'eventData');
+    if (!raw) return '-';
+    try {
+      const parsed = JSON.parse(raw);
+      const keys = Object.keys(parsed);
+      return keys.length > 0 ? `{${keys.join(', ')}}` : '{}';
+    } catch {
+      return raw.length > 40 ? raw.slice(0, 40) + '…' : raw || '-';
+    }
   }
 
   get hasPrevPage(): boolean {

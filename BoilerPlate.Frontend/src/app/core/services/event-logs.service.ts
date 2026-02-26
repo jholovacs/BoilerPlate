@@ -5,9 +5,13 @@ import { AuthApiConfigService } from './auth-api-config.service';
 
 export interface EventLogEntry {
   id: number;
+  /** MongoDB ObjectId for realtime logs; used for deduplication */
+  stringId?: string;
   timestamp?: string;
   level?: string;
   source?: string;
+  /** Serilog message template (e.g. "User {UserId} in tenant {TenantId}") */
+  messageTemplate?: string;
   message?: string;
   traceId?: string;
   spanId?: string;

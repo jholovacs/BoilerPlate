@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Database;
 using BoilerPlate.Authentication.Database.Entities;
@@ -306,7 +307,7 @@ public class TenantSettingsController : ControllerBase
         _context.TenantSettings.Add(setting);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Tenant setting created: {SettingId} - {Key} in tenant {TenantId}", setting.Id, setting.Key, targetTenantId);
+        _logger.LogInformation("Tenant setting created: {TenantSettingEntity} - {Key} in {TenantEntity}", LogEntityId.TenantSettingId(setting.Id), setting.Key, LogEntityId.TenantId(targetTenantId));
 
         var settingDto = new TenantSettingDto
         {
@@ -391,7 +392,7 @@ public class TenantSettingsController : ControllerBase
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Tenant setting updated: {SettingId} - {Key} in tenant {TenantId}", setting.Id, setting.Key, setting.TenantId);
+        _logger.LogInformation("Tenant setting updated: {TenantSettingEntity} - {Key} in {TenantEntity}", LogEntityId.TenantSettingId(setting.Id), setting.Key, LogEntityId.TenantId(setting.TenantId));
 
         var settingDto = new TenantSettingDto
         {
@@ -447,7 +448,7 @@ public class TenantSettingsController : ControllerBase
         _context.TenantSettings.Remove(setting);
         await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Tenant setting deleted: {SettingId} - {Key} from tenant {TenantId}", setting.Id, setting.Key, setting.TenantId);
+        _logger.LogInformation("Tenant setting deleted: {TenantSettingEntity} - {Key} from {TenantEntity}", LogEntityId.TenantSettingId(setting.Id), setting.Key, LogEntityId.TenantId(setting.TenantId));
 
         return NoContent();
     }

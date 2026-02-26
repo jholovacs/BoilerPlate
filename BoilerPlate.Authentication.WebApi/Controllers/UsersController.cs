@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.Database;
@@ -187,7 +188,7 @@ public class UsersController : ControllerBase
 
         if (result.User == null) return BadRequest(new { error = "User creation succeeded but user data is missing" });
 
-        _logger.LogInformation("User created: {UserId} in tenant {TenantId}", result.User.Id, targetTenantId);
+        _logger.LogInformation("User created: {UserEntity} in {TenantEntity}", LogEntityId.UserId(result.User.Id), LogEntityId.TenantId(targetTenantId));
 
         return CreatedAtAction(
             nameof(GetUserById),
@@ -368,7 +369,7 @@ public class UsersController : ControllerBase
         if (user == null)
             return NotFound(new { error = "User not found or update failed. Email may already exist.", userId = id });
 
-        _logger.LogInformation("User updated: {UserId} in tenant {TenantId}", id, tenantId);
+        _logger.LogInformation("User updated: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(tenantId!.Value));
 
         return Ok(user);
     }
@@ -399,7 +400,7 @@ public class UsersController : ControllerBase
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
-        _logger.LogInformation("User deleted: {UserId} in tenant {TenantId}", id, tenantId);
+        _logger.LogInformation("User deleted: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(tenantId!.Value));
 
         return NoContent();
     }
@@ -430,7 +431,7 @@ public class UsersController : ControllerBase
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
-        _logger.LogInformation("User activated: {UserId} in tenant {TenantId}", id, tenantId);
+        _logger.LogInformation("User activated: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(tenantId!.Value));
 
         return NoContent();
     }
@@ -461,7 +462,7 @@ public class UsersController : ControllerBase
 
         if (!result) return NotFound(new { error = "User not found", userId = id });
 
-        _logger.LogInformation("User deactivated: {UserId} in tenant {TenantId}", id, tenantId);
+        _logger.LogInformation("User deactivated: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(tenantId!.Value));
 
         return NoContent();
     }
@@ -500,7 +501,7 @@ public class UsersController : ControllerBase
                 return NotFound(new { error = "User not found", userId = id });
 
             targetTenantId = userEntity.TenantId;
-            _logger.LogInformation("Service Administrator getting roles for user {UserId} in tenant {TenantId}", id, targetTenantId);
+            _logger.LogInformation("Service Administrator getting roles for user {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(targetTenantId));
         }
         else
         {
@@ -569,7 +570,7 @@ public class UsersController : ControllerBase
                 return NotFound(new { error = "User not found", userId = id });
 
             targetTenantId = userEntity.TenantId;
-            _logger.LogInformation("Service Administrator assigning roles to user {UserId} in tenant {TenantId}", id, targetTenantId);
+            _logger.LogInformation("Service Administrator assigning roles to user {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(targetTenantId));
         }
         else
         {
@@ -602,7 +603,7 @@ public class UsersController : ControllerBase
             return BadRequest(new { error = "Failed to assign roles. Some roles may not exist in the tenant." });
         }
 
-        _logger.LogInformation("Roles assigned to user: {UserId} in tenant {TenantId}", id, targetTenantId);
+        _logger.LogInformation("Roles assigned to user: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(targetTenantId));
 
         return NoContent();
     }
@@ -648,7 +649,7 @@ public class UsersController : ControllerBase
                 return NotFound(new { error = "User not found", userId = id });
 
             targetTenantId = userEntity.TenantId;
-            _logger.LogInformation("Service Administrator removing roles from user {UserId} in tenant {TenantId}", id, targetTenantId);
+            _logger.LogInformation("Service Administrator removing roles from user {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(targetTenantId));
         }
         else
         {
@@ -675,7 +676,7 @@ public class UsersController : ControllerBase
             }
         }
 
-        _logger.LogInformation("Roles removed from user: {UserId} in tenant {TenantId}", id, targetTenantId);
+        _logger.LogInformation("Roles removed from user: {UserEntity} in {TenantEntity}", LogEntityId.UserId(id), LogEntityId.TenantId(targetTenantId));
 
         return NoContent();
     }

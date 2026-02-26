@@ -72,6 +72,32 @@
   max-width: 400px;
 }
 
+/* Entity IDs (user:guid, tenant:guid) - drilldown on hover */
+.entity-id {
+  border-bottom: 1px dotted #3498db;
+  cursor: help;
+}
+
+.entity-id:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+}
+
+.col-properties {
+  max-width: 140px;
+}
+
+.properties-link {
+  color: #3498db;
+}
+
+.properties-link:hover {
+  text-decoration: underline;
+}
+
+.muted {
+  color: #999;
+}
+
 .col-exception {
   max-width: 300px;
   font-size: 12px;

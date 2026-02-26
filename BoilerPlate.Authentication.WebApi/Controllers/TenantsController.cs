@@ -1,20 +1,22 @@
 using BoilerPlate.Authentication.Abstractions;
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
+using BoilerPlate.Authentication.WebApi.Helpers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BoilerPlate.Authentication.WebApi.Controllers;
 
 /// <summary>
-///     RESTful API controller for tenant management
-///     Requires Service Administrator role for all operations
+///     RESTful API controller for tenant management.
+///     Service Administrators: full access. Tenant Administrators: read/update their own tenant only (for "My Tenant").
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-[Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
+[Authorize]
 public class TenantsController : ControllerBase
 {
     private readonly ILogger<TenantsController> _logger;
@@ -39,6 +41,7 @@ public class TenantsController : ControllerBase
     /// <response code="200">Returns the list of tenants</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpGet]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(typeof(IEnumerable<TenantDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<IEnumerable<TenantDto>>> GetAllTenants(CancellationToken cancellationToken)
@@ -48,20 +51,30 @@ public class TenantsController : ControllerBase
     }
 
     /// <summary>
-    ///     Gets a tenant by ID
+    ///     Gets a tenant by ID. Service Administrators can access any tenant; Tenant Administrators can access their own tenant only.
     /// </summary>
     /// <param name="id">Tenant ID (UUID)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Tenant information</returns>
     /// <response code="200">Returns the tenant</response>
+    /// <response code="403">Forbidden - Tenant Administrator cannot access another tenant</response>
     /// <response code="404">Tenant not found</response>
-    /// <response code="401">Unauthorized - Service Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpGet("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.TenantReadOrUpdate)]
     [ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<TenantDto>> GetTenantById(Guid id, CancellationToken cancellationToken)
     {
+        if (!User.IsInRole("Service Administrator"))
+        {
+            var currentTenantId = ClaimsHelper.GetTenantId(User);
+            if (!currentTenantId.HasValue || currentTenantId.Value != id)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot access this tenant" });
+        }
+
         var tenant = await _tenantService.GetTenantByIdAsync(id, cancellationToken);
 
         if (tenant == null) return NotFound(new { error = "Tenant not found", tenantId = id });
@@ -79,6 +92,7 @@ public class TenantsController : ControllerBase
     /// <response code="400">Invalid request or tenant name already exists</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(typeof(TenantDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -92,7 +106,7 @@ public class TenantsController : ControllerBase
         if (tenant == null)
             return BadRequest(new { error = "Failed to create tenant. Tenant name may already exist." });
 
-        _logger.LogInformation("Tenant created: {TenantId} - {TenantName}", tenant.Id, tenant.Name);
+        _logger.LogInformation("Tenant created: {TenantEntity} - {TenantName}", LogEntityId.TenantId(tenant.Id), tenant.Name);
 
         return CreatedAtAction(
             nameof(GetTenantById),
@@ -110,6 +124,7 @@ public class TenantsController : ControllerBase
     /// <response code="400">Invalid request or tenant name already exists</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpPost("onboard")]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(typeof(TenantDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -127,7 +142,7 @@ public class TenantsController : ControllerBase
                 return BadRequest(new
                     { error = "Failed to onboard tenant. Tenant name may already exist or role creation failed." });
 
-            _logger.LogInformation("Tenant onboarded: {TenantId} - {TenantName}", tenant.Id, tenant.Name);
+            _logger.LogInformation("Tenant onboarded: {TenantEntity} - {TenantName}", LogEntityId.TenantId(tenant.Id), tenant.Name);
 
             return CreatedAtAction(
                 nameof(GetTenantById),
@@ -155,8 +170,9 @@ public class TenantsController : ControllerBase
     /// <response code="200">Tenant updated successfully</response>
     /// <response code="400">Invalid request or tenant name already exists</response>
     /// <response code="404">Tenant not found</response>
-    /// <response code="401">Unauthorized - Service Administrator role required</response>
+    /// <response code="401">Unauthorized</response>
     [HttpPut("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.TenantReadOrUpdate)]
     [ProducesResponseType(typeof(TenantDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -167,6 +183,13 @@ public class TenantsController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        if (!User.IsInRole("Service Administrator"))
+        {
+            var currentTenantId = ClaimsHelper.GetTenantId(User);
+            if (!currentTenantId.HasValue || currentTenantId.Value != id)
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "Cannot update this tenant" });
+        }
+
         var forbid = await ForbidIfSystemTenantAsync(id, cancellationToken);
         if (forbid != null) return forbid;
 
@@ -176,7 +199,7 @@ public class TenantsController : ControllerBase
             return NotFound(new
                 { error = "Tenant not found or update failed. Tenant name may already exist.", tenantId = id });
 
-        _logger.LogInformation("Tenant updated: {TenantId} - {TenantName}", tenant.Id, tenant.Name);
+        _logger.LogInformation("Tenant updated: {TenantEntity} - {TenantName}", LogEntityId.TenantId(tenant.Id), tenant.Name);
 
         return Ok(tenant);
     }
@@ -192,6 +215,7 @@ public class TenantsController : ControllerBase
     /// <response code="404">Tenant not found</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpDelete("{id}")]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -218,7 +242,7 @@ public class TenantsController : ControllerBase
             });
         }
 
-        _logger.LogInformation("Tenant deleted: {TenantId}", id);
+        _logger.LogInformation("Tenant deleted: {TenantEntity}", LogEntityId.TenantId(id));
 
         return NoContent();
     }
@@ -233,6 +257,7 @@ public class TenantsController : ControllerBase
     /// <response code="404">Tenant not found</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpDelete("{id}/offboard")]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -253,7 +278,7 @@ public class TenantsController : ControllerBase
             return BadRequest(new { error = "Failed to offboard tenant", tenantId = id });
         }
 
-        _logger.LogInformation("Tenant offboarded: {TenantId}", id);
+        _logger.LogInformation("Tenant offboarded: {TenantEntity}", LogEntityId.TenantId(id));
 
         return NoContent();
     }
@@ -269,6 +294,7 @@ public class TenantsController : ControllerBase
     /// <response code="404">Tenant not found</response>
     /// <response code="401">Unauthorized - Service Administrator role required</response>
     [HttpPost("{id}/ensure-default-roles")]
+    [Authorize(Policy = AuthorizationPolicies.ServiceAdministrator)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -283,7 +309,7 @@ public class TenantsController : ControllerBase
             return BadRequest(new
                 { error = "Failed to ensure default roles for tenant. Check logs for details.", tenantId = id });
 
-        _logger.LogInformation("Default roles ensured for tenant {TenantId} - {TenantName}", id, tenant.Name);
+        _logger.LogInformation("Default roles ensured for tenant {TenantEntity} - {TenantName}", LogEntityId.TenantId(id), tenant.Name);
         return Ok(new { message = "Default roles ensured for tenant", tenantId = id });
     }
 

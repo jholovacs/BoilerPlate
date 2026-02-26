@@ -18,7 +18,7 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly ILogger<RabbitMqTopicSubscriber<TMessage>> _logger;
     private readonly ITopicNameResolver _topicNameResolver;
-    private IModel? _channel;
+    private IChannel? _channel;
     private string? _consumerTag;
     private bool _disposed;
 
@@ -59,7 +59,7 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
     }
 
     /// <inheritdoc />
-    public Task SubscribeAsync(
+    public async Task SubscribeAsync(
         Func<TMessage, IDictionary<string, object>?, CancellationToken, Task> handler,
         int maxFailureCount = 3,
         Func<TMessage, Exception, IDictionary<string, object>?, CancellationToken, Task>? onPermanentFailure = null,
@@ -70,40 +70,44 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         try
         {
             var topicName = _topicNameResolver.ResolveTopicName<TMessage>();
-            _channel = _connectionManager.CreateChannel();
+            _channel = await _connectionManager.CreateChannelAsync(cancellationToken).ConfigureAwait(false);
 
             // Declare exchange (topic exchange)
-            _channel.ExchangeDeclare(
+            await _channel.ExchangeDeclareAsync(
                 topicName,
                 ExchangeType.Topic,
-                true,
-                false);
+                durable: true,
+                autoDelete: false,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // Declare queue (unique per consumer instance)
             var queueName = $"{topicName}.{Guid.NewGuid():N}";
-            _channel.QueueDeclare(
+            await _channel.QueueDeclareAsync(
                 queueName,
-                false,
-                true,
-                true);
+                durable: false,
+                exclusive: true,
+                autoDelete: true,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // Bind queue to exchange
-            _channel.QueueBind(
+            await _channel.QueueBindAsync(
                 queueName,
                 topicName,
-                "#");
+                "#",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // Create consumer
-            var consumer = new EventingBasicConsumer(_channel);
-            consumer.Received += async (model, ea) =>
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            consumer.ReceivedAsync += async (_, ea) =>
             {
                 await ProcessMessageAsync(ea, handler, maxFailureCount, onPermanentFailure, cancellationToken);
             };
 
-            _consumerTag = _channel.BasicConsume(
+            _consumerTag = await _channel.BasicConsumeAsync(
                 queueName,
-                false,
-                consumer);
+                autoAck: false,
+                consumer,
+                cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Subscribed to topic {TopicName}. Queue: {QueueName}, ConsumerTag: {ConsumerTag}",
@@ -115,22 +119,23 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         {
             _logger.LogError(ex, "Failed to subscribe to topic {TopicName}",
                 _topicNameResolver.ResolveTopicName<TMessage>());
-            _channel?.Close();
-            _channel?.Dispose();
-            _channel = null;
+            if (_channel != null)
+            {
+                await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+                await _channel.DisposeAsync().ConfigureAwait(false);
+                _channel = null;
+            }
             throw;
         }
-
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task UnsubscribeAsync(CancellationToken cancellationToken = default)
+    public async Task UnsubscribeAsync(CancellationToken cancellationToken = default)
     {
         if (_channel != null && _consumerTag != null)
             try
             {
-                _channel.BasicCancel(_consumerTag);
+                await _channel.BasicCancelAsync(_consumerTag, cancellationToken: cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Unsubscribed from topic. ConsumerTag: {ConsumerTag}", _consumerTag);
             }
             catch (Exception ex)
@@ -139,13 +144,11 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
             }
             finally
             {
-                _channel?.Close();
-                _channel?.Dispose();
+                await _channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+                await _channel.DisposeAsync().ConfigureAwait(false);
                 _channel = null;
                 _consumerTag = null;
             }
-
-        return Task.CompletedTask;
     }
 
     private async Task ProcessMessageAsync(
@@ -155,12 +158,12 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
         Func<TMessage, Exception, IDictionary<string, object>?, CancellationToken, Task>? onPermanentFailure,
         CancellationToken cancellationToken)
     {
+        var channel = _channel;
         TMessage? message = null;
-        var shouldAck = false;
 
         try
         {
-            // Deserialize message
+            // Deserialize message (copy body - ReadOnlyMemory is reused after handler returns)
             var body = ea.Body.ToArray();
             var json = Encoding.UTF8.GetString(body);
             message = JsonSerializer.Deserialize<TMessage>(json, _jsonOptions);
@@ -168,23 +171,24 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
             if (message == null)
             {
                 _logger.LogError("Failed to deserialize message from topic");
-                _channel?.BasicNack(ea.DeliveryTag, false, false);
+                if (channel != null)
+                    await channel.BasicNackAsync(ea.DeliveryTag, false, false, cancellationToken).ConfigureAwait(false);
                 return;
             }
 
-            // Restore IMessage properties from headers
+            // Restore IMessage properties from headers (AMQP may encode strings as byte[])
             if (ea.BasicProperties.Headers != null)
             {
                 if (ea.BasicProperties.Headers.TryGetValue("TraceId", out var traceIdObj))
-                    message.TraceId = traceIdObj?.ToString();
+                    message.TraceId = GetHeaderString(traceIdObj);
                 if (ea.BasicProperties.Headers.TryGetValue("ReferenceId", out var refIdObj))
-                    message.ReferenceId = refIdObj?.ToString();
+                    message.ReferenceId = GetHeaderString(refIdObj);
                 if (ea.BasicProperties.Headers.TryGetValue("CreatedTimestamp", out var timestampObj))
-                    if (DateTime.TryParse(timestampObj?.ToString(), out var timestamp))
+                    if (DateTime.TryParse(GetHeaderString(timestampObj), out var timestamp))
                         message.CreatedTimestamp = timestamp;
 
                 if (ea.BasicProperties.Headers.TryGetValue("FailureCount", out var failureCountObj))
-                    if (int.TryParse(failureCountObj?.ToString(), out var failureCount))
+                    if (int.TryParse(GetHeaderString(failureCountObj), out var failureCount))
                         message.FailureCount = failureCount;
             }
 
@@ -201,36 +205,43 @@ public class RabbitMqTopicSubscriber<TMessage> : ITopicSubscriber<TMessage>, IDi
                 maxFailureCount,
                 onPermanentFailure,
                 _logger,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
 
-            if (shouldDestroy)
+            if (channel != null)
             {
-                // Permanent failure - acknowledge to remove from queue
-                _channel?.BasicAck(ea.DeliveryTag, false);
-                _logger.LogWarning(
-                    "Message permanently failed and removed from queue. TraceId: {TraceId}",
-                    message.TraceId);
-            }
-            else
-            {
-                // Success or temporary failure - acknowledge on success, reject on failure
-                if (message.FailureCount == 0)
+                if (shouldDestroy)
+                {
+                    // Permanent failure - acknowledge to remove from queue
+                    await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken).ConfigureAwait(false);
+                    _logger.LogWarning(
+                        "Message permanently failed and removed from queue. TraceId: {TraceId}",
+                        message.TraceId);
+                }
+                else if (message.FailureCount == 0)
                 {
                     // Success - acknowledge
-                    _channel?.BasicAck(ea.DeliveryTag, false);
-                    shouldAck = true;
+                    await channel.BasicAckAsync(ea.DeliveryTag, false, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
                     // Temporary failure - reject and requeue
-                    _channel?.BasicNack(ea.DeliveryTag, false, true);
+                    await channel.BasicNackAsync(ea.DeliveryTag, false, true, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing message from topic");
-            _channel?.BasicNack(ea.DeliveryTag, false, false);
+            if (channel != null)
+                await channel.BasicNackAsync(ea.DeliveryTag, false, false, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private static string? GetHeaderString(object? value)
+    {
+        if (value == null) return null;
+        if (value is byte[] bytes)
+            return Encoding.UTF8.GetString(bytes);
+        return value.ToString();
     }
 }

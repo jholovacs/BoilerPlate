@@ -46,6 +46,12 @@ public static class AuthorizationPolicies
     ///     tenant
     /// </summary>
     public const string OAuthClientManagement = "OAuthClientManagementPolicy";
+
+    /// <summary>
+    ///     Policy for tenant read/update - allows Service Administrators (any tenant) or Tenant Administrators (own tenant only).
+    ///     Used for GetTenantById and UpdateTenant so Tenant Administrators can access "My Tenant".
+    /// </summary>
+    public const string TenantReadOrUpdate = "TenantReadOrUpdatePolicy";
 }
 
 /// <summary>
@@ -88,6 +94,10 @@ public static class AuthorizationPolicyExtensions
 
             // OAuth Client Management Policy - allows Service Administrators or Tenant Administrators
             options.AddPolicy(AuthorizationPolicies.OAuthClientManagement, policy =>
+                policy.RequireRole("Service Administrator", "Tenant Administrator"));
+
+            // Tenant Read/Update Policy - allows Service Administrators or Tenant Administrators (own tenant only, enforced in controller)
+            options.AddPolicy(AuthorizationPolicies.TenantReadOrUpdate, policy =>
                 policy.RequireRole("Service Administrator", "Tenant Administrator"));
         });
 

@@ -58,7 +58,8 @@ public class AuthorizationOperationFilter : IOperationFilter
                 },
                 { AuthorizationPolicies.RoleManagement, "Service Administrator, Tenant Administrator, or Role Administrator" },
                 { AuthorizationPolicies.ODataAccess, "Service Administrator or Tenant Administrator" },
-                { AuthorizationPolicies.OAuthClientManagement, "Service Administrator or Tenant Administrator" }
+                { AuthorizationPolicies.OAuthClientManagement, "Service Administrator or Tenant Administrator" },
+                { AuthorizationPolicies.TenantReadOrUpdate, "Service Administrator or Tenant Administrator (own tenant only)" }
             };
 
             // Build description for required permissions
@@ -99,7 +100,8 @@ public class AuthorizationOperationFilter : IOperationFilter
                         roles.Add("Role Administrator");
                     }
                     else if (policy == AuthorizationPolicies.ODataAccess ||
-                             policy == AuthorizationPolicies.OAuthClientManagement)
+                             policy == AuthorizationPolicies.OAuthClientManagement ||
+                             policy == AuthorizationPolicies.TenantReadOrUpdate)
                     {
                         roles.Add("Service Administrator");
                         roles.Add("Tenant Administrator");

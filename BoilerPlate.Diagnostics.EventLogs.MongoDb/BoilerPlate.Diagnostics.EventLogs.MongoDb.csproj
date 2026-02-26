@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="BoilerPlate.Diagnostics.EventLogs.MongoDb.Tests" />
     <ProjectReference Include="..\BoilerPlate.Diagnostics.Database\BoilerPlate.Diagnostics.Database.csproj" />
   </ItemGroup>
 

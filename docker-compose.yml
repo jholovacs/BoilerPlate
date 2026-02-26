@@ -47,6 +47,8 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: SecurePassword123!
+    ports:
+      - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:

@@ -29,7 +29,12 @@ public class EventLogPublishedEvent : IMessage
     public string? Source { get; set; }
 
     /// <summary>
-    ///     Log message.
+    ///     Serilog message template (e.g. "User {UserId} in tenant {TenantId}").
+    /// </summary>
+    public string? MessageTemplate { get; set; }
+
+    /// <summary>
+    ///     Rendered log message.
     /// </summary>
     public string Message { get; set; } = null!;
 
@@ -42,6 +47,11 @@ public class EventLogPublishedEvent : IMessage
     ///     Span ID.
     /// </summary>
     public string? SpanId { get; set; }
+
+    /// <summary>
+    ///     Tenant ID (top-level for filtering by tenant administrators).
+    /// </summary>
+    public string? TenantId { get; set; }
 
     /// <summary>
     ///     Exception details if applicable.

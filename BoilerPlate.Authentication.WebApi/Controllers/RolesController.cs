@@ -1,4 +1,5 @@
 using BoilerPlate.Authentication.Abstractions;
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -165,8 +166,7 @@ public class RolesController : ControllerBase
         if (role == null)
             return BadRequest(new { error = "Failed to create role. Role name may already exist in this tenant." });
 
-        _logger.LogInformation("Role created: {RoleId} - {RoleName} in tenant {TenantId}", role.Id, role.Name,
-            tenantId);
+        _logger.LogInformation("Role created: {RoleEntity} - {RoleName} in {TenantEntity}", LogEntityId.RoleId(role.Id), role.Name, LogEntityId.TenantId(tenantId));
 
         return CreatedAtAction(
             nameof(GetRoleById),
@@ -218,8 +218,7 @@ public class RolesController : ControllerBase
             return BadRequest(new
                 { error = "Update failed. Role name may already exist in this tenant.", roleId = id });
 
-        _logger.LogInformation("Role updated: {RoleId} - {RoleName} in tenant {TenantId}", role.Id, role.Name,
-            effectiveTenantId);
+        _logger.LogInformation("Role updated: {RoleEntity} - {RoleName} in {TenantEntity}", LogEntityId.RoleId(role.Id), role.Name, LogEntityId.TenantId(effectiveTenantId));
 
         return Ok(role);
     }
@@ -258,7 +257,7 @@ public class RolesController : ControllerBase
 
         if (!result) return BadRequest(new { error = "Failed to delete role", roleId = id });
 
-        _logger.LogInformation("Role deleted: {RoleId} in tenant {TenantId}", id, effectiveTenantId);
+        _logger.LogInformation("Role deleted: {RoleEntity} in {TenantEntity}", LogEntityId.RoleId(id), LogEntityId.TenantId(effectiveTenantId));
 
         return NoContent();
     }

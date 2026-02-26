@@ -14,8 +14,9 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OpenApi.Models;
 using Serilog;
-using Serilog.Sinks.RabbitMQ;
 using Serilog.Events;
+using Serilog.Templates;
+using Serilog.Sinks.RabbitMQ;
 using Swashbuckle.AspNetCore.SwaggerUI;
 
 // Configure Serilog before creating the builder
@@ -84,6 +85,9 @@ else
                 clientConfig.AutoCreateExchange = true;
                 clientConfig.DeliveryMode = RabbitMQDeliveryMode.Durable;
                 sinkConfig.RestrictedToMinimumLevel = LogEventLevel.Verbose;
+                // Use ExpressionTemplate to send template (@mt), rendered message (@m), properties (..@p),
+                // and full logging context to MongoDB for diagnostics.
+                sinkConfig.TextFormatter = new ExpressionTemplate("{ {@t, @mt, @m, @l, @x, ..@p} }\n");
             });
         }
         catch (Exception ex)

@@ -49,10 +49,36 @@
         <tbody>
           <tr *ngFor="let log of logs">
             <td class="col-timestamp">{{ formatTimestamp(getLogValue(log, 'eventTimestamp') ?? getLogValue(log, 'createdAt')) }}</td>
-            <td>{{ getLogValue(log, 'eventType') || '-' }}</td>
-            <td>{{ getLogValue(log, 'userName') || '-' }}</td>
-            <td>{{ getLogValue(log, 'email') || '-' }}</td>
-            <td class="col-event-data">{{ truncate(getLogValue(log, 'eventData'), 80) }}</td>
+            <td>
+              <span
+                class="truncate-cell"
+                [title]="getLogValue(log, 'eventType') || ''"
+                (click)="openModal(getLogValue(log, 'eventType') || '', 'Event type')"
+              >{{ getLogValue(log, 'eventType') || '-' }}</span>
+            </td>
+            <td>
+              <span
+                class="truncate-cell"
+                [title]="getLogValue(log, 'userName') || ''"
+                (click)="openModal(getLogValue(log, 'userName') || '', 'User')"
+              >{{ getLogValue(log, 'userName') || '-' }}</span>
+            </td>
+            <td>
+              <span
+                class="truncate-cell"
+                [title]="getLogValue(log, 'email') || ''"
+                (click)="openModal(getLogValue(log, 'email') || '', 'Email')"
+              >{{ getLogValue(log, 'email') || '-' }}</span>
+            </td>
+            <td class="col-event-data">
+              <span
+                *ngIf="getLogValue(log, 'eventData')"
+                class="truncate-cell event-data-link"
+                [title]="'View event data'"
+                (click)="openModal(formatEventData(getLogValue(log, 'eventData')), 'Event data')"
+              >{{ eventDataPreview(log) }}</span>
+              <span *ngIf="!getLogValue(log, 'eventData')" class="muted">-</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -61,6 +87,25 @@
         <span class="pagination-text">{{ pageInfo }}</span>
         <button class="btn btn-secondary" [disabled]="!hasNextPage" (click)="nextPage()">Next</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for full text view with copy -->
+<div *ngIf="modalVisible" class="modal-overlay" (click)="closeModal()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>{{ modalTitle }}</h3>
+      <button type="button" class="modal-close" (click)="closeModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <pre class="modal-content" [innerHTML]="modalContent | entityIds"></pre>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-primary" (click)="copyToClipboard()">
+        {{ copyFeedback ? 'Copied!' : 'Copy to clipboard' }}
+      </button>
+      <button type="button" class="btn btn-secondary" (click)="closeModal()">Close</button>
     </div>
   </div>
 </div>

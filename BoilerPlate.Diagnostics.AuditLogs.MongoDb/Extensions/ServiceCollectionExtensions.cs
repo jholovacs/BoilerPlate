@@ -1,3 +1,4 @@
+using BoilerPlate.Diagnostics.AuditLogs.MongoDb.Services;
 using BoilerPlate.Diagnostics.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,7 @@ public static class ServiceCollectionExtensions
             var options = sp.GetRequiredService<DbContextOptions<BaseAuditLogDbContext>>();
             return new AuditLogsMongoDbContext(options);
         });
+        services.AddScoped<IAuditLogsRawQueryService, AuditLogsRawQueryService>();
 
         return services;
     }

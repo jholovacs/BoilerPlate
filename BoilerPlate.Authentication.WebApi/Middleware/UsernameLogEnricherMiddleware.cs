@@ -43,12 +43,12 @@ public class UsernameLogEnricherMiddleware
                 tenantId = tenantIdGuid.Value.ToString();
         }
 
-        // Enrich log context with user information (if available)
-        // Use IDisposable pattern for conditional property pushing
+        // Enrich log context with user information (if available).
+        // Use camelCase "tenantId" as top-level property for MongoDB filtering by tenant administrators.
         using (LogContext.PushProperty("Username", username ?? "(anonymous)"))
         {
             IDisposable? userIdProperty = userId != null ? LogContext.PushProperty("UserId", userId) : null;
-            IDisposable? tenantIdProperty = tenantId != null ? LogContext.PushProperty("TenantId", tenantId) : null;
+            IDisposable? tenantIdProperty = tenantId != null ? LogContext.PushProperty("tenantId", tenantId) : null;
 
             try
             {

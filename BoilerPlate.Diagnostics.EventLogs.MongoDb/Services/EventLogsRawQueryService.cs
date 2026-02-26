@@ -8,7 +8,7 @@ using MongoDB.Driver;
 namespace BoilerPlate.Diagnostics.EventLogs.MongoDb.Services;
 
 /// <summary>
-///     Raw MongoDB queries for event logs with tenant filtering via Properties.tenantId.
+///     Raw MongoDB queries for event logs with tenant filtering via top-level tenantId (or Properties.tenantId for backward compatibility).
 /// </summary>
 public sealed class EventLogsRawQueryService : IEventLogsRawQueryService
 {
@@ -48,7 +48,13 @@ public sealed class EventLogsRawQueryService : IEventLogsRawQueryService
         var filters = new List<FilterDefinition<BsonDocument>>();
 
         if (tenantId.HasValue)
-            filters.Add(filterBuilder.Eq("Properties.tenantId", tenantId.Value.ToString()));
+        {
+            var tenantStr = tenantId.Value.ToString();
+            filters.Add(filterBuilder.Or(
+                filterBuilder.Eq("tenantId", tenantStr),
+                filterBuilder.Eq("Properties.tenantId", tenantStr),
+                filterBuilder.Eq("Properties.TenantId", tenantStr)));
+        }
 
         if (!string.IsNullOrWhiteSpace(levelFilter))
             filters.Add(filterBuilder.Eq("Level", levelFilter));
@@ -62,16 +68,45 @@ public sealed class EventLogsRawQueryService : IEventLogsRawQueryService
             ? Builders<BsonDocument>.Sort.Descending("Timestamp")
             : Builders<BsonDocument>.Sort.Ascending("Timestamp");
 
+        // Use aggregation to deduplicate: same log can be written multiple times (e.g. RabbitMQ redelivery).
+        // Group by Timestamp+Message+Level+Source and take first to get unique log entries.
+        var matchStage = filter.Render(_collection.DocumentSerializer, _collection.Settings.SerializerRegistry);
+        var pipeline = new List<BsonDocument>
+        {
+            new BsonDocument("$match", matchStage),
+            new BsonDocument("$sort", new BsonDocument("Timestamp", orderByDesc ? -1 : 1)),
+            new BsonDocument("$group", new BsonDocument
+            {
+                { "_id", new BsonDocument
+                {
+                    { "Timestamp", "$Timestamp" },
+                    { "Message", "$Message" },
+                    { "Level", "$Level" },
+                    { "Source", "$Source" }
+                }},
+                { "doc", new BsonDocument("$first", "$$ROOT") }
+            }),
+            new BsonDocument("$replaceRoot", new BsonDocument("newRoot", "$doc")),
+            new BsonDocument("$sort", new BsonDocument("Timestamp", orderByDesc ? -1 : 1))
+        };
+
         long? count = null;
         if (includeCount)
-            count = await _collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+        {
+            var countPipeline = new List<BsonDocument>(pipeline)
+            {
+                new BsonDocument("$count", "total")
+            };
+            var countCursor = await _collection.AggregateAsync<BsonDocument>(countPipeline, cancellationToken: cancellationToken);
+            var countDoc = await countCursor.FirstOrDefaultAsync(cancellationToken);
+            count = countDoc?.GetValue("total", 0).ToInt64() ?? 0;
+        }
 
-        var docs = await _collection
-            .Find(filter)
-            .Sort(sort)
-            .Skip(skip)
-            .Limit(top)
-            .ToListAsync(cancellationToken);
+        pipeline.Add(new BsonDocument("$skip", skip));
+        pipeline.Add(new BsonDocument("$limit", top));
+
+        var cursor = await _collection.AggregateAsync<BsonDocument>(pipeline, cancellationToken: cancellationToken);
+        var docs = await cursor.ToListAsync(cancellationToken);
 
         var results = docs.ConvertAll(MapToEventLogEntry);
         return (results, count);
@@ -85,7 +120,13 @@ public sealed class EventLogsRawQueryService : IEventLogsRawQueryService
         var filter = filterBuilder.Eq("_id", objectId);
 
         if (tenantId.HasValue)
-            filter = filterBuilder.And(filter, filterBuilder.Eq("Properties.tenantId", tenantId.Value.ToString()));
+        {
+            var tenantStr = tenantId.Value.ToString();
+            filter = filterBuilder.And(filter, filterBuilder.Or(
+                filterBuilder.Eq("tenantId", tenantStr),
+                filterBuilder.Eq("Properties.tenantId", tenantStr),
+                filterBuilder.Eq("Properties.TenantId", tenantStr)));
+        }
 
         var doc = await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return doc == null ? null : MapToEventLogEntry(doc);
@@ -107,6 +148,7 @@ public sealed class EventLogsRawQueryService : IEventLogsRawQueryService
             Timestamp = doc.Contains("Timestamp") ? doc["Timestamp"].ToUniversalTime() : default,
             Level = doc.GetValue("Level", "").AsString,
             Source = doc.Contains("Source") ? doc["Source"].AsString : null,
+            MessageTemplate = doc.Contains("MessageTemplate") ? doc["MessageTemplate"].AsString : null,
             Message = doc.GetValue("Message", "").AsString,
             TraceId = doc.Contains("TraceId") ? doc["TraceId"].AsString : null,
             SpanId = doc.Contains("SpanId") ? doc["SpanId"].AsString : null,

@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -195,8 +196,7 @@ public class TenantEmailDomainsController : ControllerBase
         if (domain == null)
             return BadRequest(new { error = "Failed to create tenant email domain. Domain may already exist." });
 
-        _logger.LogInformation("Tenant email domain created: {DomainId} - {Domain} for tenant {TenantId}", domain.Id,
-            domain.Domain, targetTenantId);
+        _logger.LogInformation("Tenant email domain created: {TenantDomainEntity} - {Domain} for {TenantEntity}", LogEntityId.TenantDomainId(domain.Id), domain.Domain, LogEntityId.TenantId(targetTenantId));
 
         return CreatedAtAction(
             nameof(GetTenantEmailDomainById),
@@ -255,8 +255,7 @@ public class TenantEmailDomainsController : ControllerBase
         if (updatedDomain == null)
             return BadRequest(new { error = "Failed to update tenant email domain. Domain may already exist." });
 
-        _logger.LogInformation("Tenant email domain updated: {DomainId} - {Domain} in tenant {TenantId}", updatedDomain.Id,
-            updatedDomain.Domain, updatedDomain.TenantId);
+        _logger.LogInformation("Tenant email domain updated: {TenantDomainEntity} - {Domain} in {TenantEntity}", LogEntityId.TenantDomainId(updatedDomain.Id), updatedDomain.Domain, LogEntityId.TenantId(updatedDomain.TenantId));
 
         return Ok(updatedDomain);
     }
@@ -304,8 +303,7 @@ public class TenantEmailDomainsController : ControllerBase
         if (!result)
             return NotFound(new { error = "Tenant email domain not found", domainId = id });
 
-        _logger.LogInformation("Tenant email domain deleted: {DomainId} - {Domain} from tenant {TenantId}", domain.Id,
-            domain.Domain, domain.TenantId);
+        _logger.LogInformation("Tenant email domain deleted: {TenantDomainEntity} - {Domain} from {TenantEntity}", LogEntityId.TenantDomainId(domain.Id), domain.Domain, LogEntityId.TenantId(domain.TenantId));
 
         return NoContent();
     }

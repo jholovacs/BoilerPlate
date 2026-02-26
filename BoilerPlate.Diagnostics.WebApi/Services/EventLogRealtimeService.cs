@@ -34,16 +34,18 @@ public class EventLogRealtimeService : BackgroundService
             {
                 try
                 {
-                    var tenantId = ExtractTenantId(message.Properties);
+                    var tenantId = Guid.TryParse(message.TenantId, out var t) ? t : ExtractTenantId(message.Properties);
                     var payload = new
                     {
                         message.Id,
                         message.Timestamp,
                         message.Level,
                         message.Source,
+                        message.MessageTemplate,
                         message.Message,
                         message.TraceId,
                         message.SpanId,
+                        message.TenantId,
                         message.Exception,
                         message.Properties
                     };
@@ -70,15 +72,13 @@ public class EventLogRealtimeService : BackgroundService
         {
             var doc = JsonDocument.Parse(properties);
             var root = doc.RootElement;
-            if (root.TryGetProperty("tenantId", out var tid) && tid.ValueKind == JsonValueKind.String)
+            foreach (var name in new[] { "tenantId", "TenantId" })
             {
-                var s = tid.GetString();
-                return Guid.TryParse(s, out var g) ? g : null;
-            }
-            if (root.TryGetProperty("TenantId", out var tid2) && tid2.ValueKind == JsonValueKind.String)
-            {
-                var s = tid2.GetString();
-                return Guid.TryParse(s, out var g) ? g : null;
+                if (root.TryGetProperty(name, out var tid) && tid.ValueKind == JsonValueKind.String)
+                {
+                    var s = tid.GetString();
+                    if (Guid.TryParse(s, out var g)) return g;
+                }
             }
         }
         catch { /* ignore */ }

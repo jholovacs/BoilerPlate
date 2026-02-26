@@ -60,6 +60,7 @@
               <th>Level</th>
               <th>Source</th>
               <th>Message</th>
+              <th>Properties</th>
               <th>Exception</th>
             </tr>
           </thead>
@@ -76,10 +77,20 @@
               </td>
               <td class="col-message">
                 <span
-                  class="truncate-cell"
+                  class="truncate-cell message-cell"
                   [title]="getLogValue(log, 'message') || ''"
                   (click)="openModal(getLogValue(log, 'message') || '', 'Message')"
-                >{{ getLogValue(log, 'message') || '-' }}</span>
+                  [innerHTML]="(getLogValue(log, 'message') || '-') | entityIds"
+                ></span>
+              </td>
+              <td class="col-properties">
+                <span
+                  *ngIf="getLogValue(log, 'properties')"
+                  class="truncate-cell properties-link"
+                  [title]="'View properties'"
+                  (click)="openModal(formatProperties(getLogValue(log, 'properties')), 'Properties')"
+                >{{ propertiesPreview(log) }}</span>
+                <span *ngIf="!getLogValue(log, 'properties')" class="muted">-</span>
               </td>
               <td class="col-exception">
                 <span
@@ -109,7 +120,7 @@
       <button type="button" class="modal-close" (click)="closeModal()" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <pre class="modal-content">{{ modalContent }}</pre>
+      <pre class="modal-content" [innerHTML]="modalContent | entityIds"></pre>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-primary" (click)="copyToClipboard()">

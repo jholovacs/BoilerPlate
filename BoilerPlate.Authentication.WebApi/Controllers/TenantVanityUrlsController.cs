@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Configuration;
@@ -195,8 +196,7 @@ public class TenantVanityUrlsController : ControllerBase
         if (vanityUrl == null)
             return BadRequest(new { error = "Failed to create tenant vanity URL. Hostname may already exist." });
 
-        _logger.LogInformation("Tenant vanity URL created: {VanityUrlId} - {Hostname} for tenant {TenantId}", vanityUrl.Id,
-            vanityUrl.Hostname, targetTenantId);
+        _logger.LogInformation("Tenant vanity URL created: {TenantVanityUrlEntity} - {Hostname} for {TenantEntity}", LogEntityId.TenantVanityUrlId(vanityUrl.Id), vanityUrl.Hostname, LogEntityId.TenantId(targetTenantId));
 
         return CreatedAtAction(
             nameof(GetTenantVanityUrlById),
@@ -255,8 +255,7 @@ public class TenantVanityUrlsController : ControllerBase
         if (updatedVanityUrl == null)
             return BadRequest(new { error = "Failed to update tenant vanity URL. Hostname may already exist." });
 
-        _logger.LogInformation("Tenant vanity URL updated: {VanityUrlId} - {Hostname} in tenant {TenantId}", updatedVanityUrl.Id,
-            updatedVanityUrl.Hostname, updatedVanityUrl.TenantId);
+        _logger.LogInformation("Tenant vanity URL updated: {TenantVanityUrlEntity} - {Hostname} in {TenantEntity}", LogEntityId.TenantVanityUrlId(updatedVanityUrl.Id), updatedVanityUrl.Hostname, LogEntityId.TenantId(updatedVanityUrl.TenantId));
 
         return Ok(updatedVanityUrl);
     }
@@ -304,8 +303,7 @@ public class TenantVanityUrlsController : ControllerBase
         if (!result)
             return NotFound(new { error = "Tenant vanity URL not found", vanityUrlId = id });
 
-        _logger.LogInformation("Tenant vanity URL deleted: {VanityUrlId} - {Hostname} from tenant {TenantId}", vanityUrl.Id,
-            vanityUrl.Hostname, vanityUrl.TenantId);
+        _logger.LogInformation("Tenant vanity URL deleted: {TenantVanityUrlEntity} - {Hostname} from {TenantEntity}", LogEntityId.TenantVanityUrlId(vanityUrl.Id), vanityUrl.Hostname, LogEntityId.TenantId(vanityUrl.TenantId));
 
         return NoContent();
     }

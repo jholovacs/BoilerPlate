@@ -1,3 +1,4 @@
+using BoilerPlate.Authentication.Abstractions.Logging;
 using BoilerPlate.Authentication.Abstractions.Models;
 using BoilerPlate.Authentication.Abstractions.Services;
 using BoilerPlate.Authentication.WebApi.Helpers;
@@ -70,7 +71,7 @@ public class AccountController : ControllerBase
         if (!success)
             return BadRequest(new { error = "Password change failed. Check current password and that the new password meets the tenant's password policy." });
 
-        _logger.LogInformation("User {UserId} changed their password.", userId);
+        _logger.LogInformation("User {UserEntity} changed their password.", LogEntityId.UserId(userId.Value));
         return NoContent();
     }
 }

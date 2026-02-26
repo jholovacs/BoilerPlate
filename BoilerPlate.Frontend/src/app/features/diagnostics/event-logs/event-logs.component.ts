@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { EventLogsService, EventLogEntry } from '../../../core/services/event-logs.service';
 import { EventLogsSignalRService } from '../../../core/services/event-logs-signalr.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { EntityIdsPipe } from './entity-id.pipe';
 
 const PAGE_SIZE = 50;
 const LOG_LEVELS = ['', 'Verbose', 'Debug', 'Information', 'Warning', 'Error', 'Fatal'];
@@ -12,7 +13,7 @@ const LOG_LEVELS = ['', 'Verbose', 'Debug', 'Information', 'Warning', 'Error', '
 @Component({
   selector: 'app-event-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, EntityIdsPipe],
   templateUrl: './event-logs.component.html',
   styleUrl: './event-logs.component.css'
 })
@@ -61,7 +62,11 @@ export class EventLogsComponent implements OnInit, OnDestroy {
       this.sub?.unsubscribe();
       this.sub = this.signalr.onEventLog.subscribe(evt => {
         const entry = this.toEventLogEntry(evt);
-        this.realtimeLogs.update(logs => [entry, ...logs].slice(0, 500));
+        this.realtimeLogs.update(logs => {
+          const id = entry.stringId ?? String(entry.id);
+          if (logs.some(l => (l.stringId ?? String(l.id)) === id)) return logs;
+          return [entry, ...logs].slice(0, 500);
+        });
       });
       this.totalCount = null;
     } else {
@@ -78,23 +83,41 @@ export class EventLogsComponent implements OnInit, OnDestroy {
 
   private passesClientFilter(log: EventLogEntry): boolean {
     const msg = (log.message ?? '').toLowerCase();
+    const tpl = (log.messageTemplate ?? '').toLowerCase();
     const src = (log.source ?? '').toLowerCase();
+    const props = (log.properties ?? '').toLowerCase();
     const exc = (log.exception ?? '').toLowerCase();
     const lvl = (log.level ?? '').toLowerCase();
     const term = this.searchTerm?.trim().toLowerCase();
-    if (term && !msg.includes(term) && !src.includes(term) && !exc.includes(term)) return false;
+    if (term && !msg.includes(term) && !tpl.includes(term) && !src.includes(term) && !props.includes(term) && !exc.includes(term)) return false;
     if (this.levelFilter && lvl !== this.levelFilter.toLowerCase()) return false;
     return true;
   }
 
-  private toEventLogEntry(evt: { id: string; timestamp: string; level: string; source?: string; message: string; exception?: string }): EventLogEntry {
+  private toEventLogEntry(evt: {
+    id: string;
+    timestamp: string;
+    level: string;
+    source?: string;
+    messageTemplate?: string;
+    message: string;
+    traceId?: string;
+    spanId?: string;
+    exception?: string;
+    properties?: string;
+  }): EventLogEntry {
     return {
       id: 0,
+      stringId: evt.id,
       timestamp: evt.timestamp,
       level: evt.level,
       source: evt.source,
+      messageTemplate: evt.messageTemplate,
       message: evt.message,
-      exception: evt.exception
+      traceId: evt.traceId,
+      spanId: evt.spanId,
+      exception: evt.exception,
+      properties: evt.properties
     };
   }
 
@@ -167,7 +190,7 @@ export class EventLogsComponent implements OnInit, OnDestroy {
   }
 
   /** Get value handling both camelCase and PascalCase from OData API */
-  getLogValue(log: EventLogEntry, key: 'timestamp' | 'level' | 'source' | 'message' | 'exception'): string | undefined {
+  getLogValue(log: EventLogEntry, key: 'timestamp' | 'level' | 'source' | 'messageTemplate' | 'message' | 'properties' | 'exception'): string | undefined {
     const k = key as keyof EventLogEntry;
     const val = log[k];
     if (val != null) return String(val);
@@ -231,6 +254,31 @@ export class EventLogsComponent implements OnInit, OnDestroy {
     this.modalTitle = title;
     this.modalVisible = true;
     this.copyFeedback = false;
+  }
+
+  /** Pretty-print JSON for display in modal */
+  formatProperties(properties: string | undefined): string {
+    if (!properties?.trim()) return '';
+    try {
+      const parsed = JSON.parse(properties);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return properties;
+    }
+  }
+
+  /** Short preview of properties for table cell */
+  propertiesPreview(log: EventLogEntry): string {
+    const raw = log.properties ?? (log as unknown as Record<string, unknown>)['Properties'];
+    const p: string = typeof raw === 'string' ? raw : (raw != null ? JSON.stringify(raw) : '');
+    if (!p) return '-';
+    try {
+      const parsed = JSON.parse(p);
+      const keys = Object.keys(parsed);
+      return keys.length > 0 ? `{${keys.join(', ')}}` : '{}';
+    } catch {
+      return p.length > 30 ? p.slice(0, 30) + '…' : p || '-';
+    }
   }
 
   closeModal(): void {

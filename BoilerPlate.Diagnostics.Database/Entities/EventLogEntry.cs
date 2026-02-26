@@ -26,7 +26,12 @@ public class EventLogEntry
     public string? Source { get; set; }
 
     /// <summary>
-    ///     Log message.
+    ///     Serilog message template (e.g. "User {UserId} in tenant {TenantId}").
+    /// </summary>
+    public string? MessageTemplate { get; set; }
+
+    /// <summary>
+    ///     Rendered log message.
     /// </summary>
     public string Message { get; set; } = null!;
 

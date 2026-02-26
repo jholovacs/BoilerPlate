@@ -43,7 +43,7 @@ public class RabbitMqTopicPublisher : ITopicPublisher
     }
 
     /// <inheritdoc />
-    public Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata,
+    public async Task PublishAsync<TMessage>(TMessage message, IDictionary<string, object>? metadata,
         CancellationToken cancellationToken = default)
         where TMessage : class, IMessage, new()
     {
@@ -53,48 +53,51 @@ public class RabbitMqTopicPublisher : ITopicPublisher
             if (message.CreatedTimestamp == default) message.CreatedTimestamp = DateTime.UtcNow;
 
             var topicName = _topicNameResolver.ResolveTopicName(typeof(TMessage));
-            var channel = _connectionManager.CreateChannel();
+            var channel = await _connectionManager.CreateChannelAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
                 // Declare exchange (topic exchange)
-                channel.ExchangeDeclare(
+                await channel.ExchangeDeclareAsync(
                     topicName,
                     ExchangeType.Topic,
-                    true,
-                    false);
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Serialize message
                 var json = JsonSerializer.Serialize(message, _jsonOptions);
                 var body = Encoding.UTF8.GetBytes(json);
 
                 // Create properties
-                var properties = channel.CreateBasicProperties();
-                properties.Persistent = true;
-                properties.MessageId = Guid.NewGuid().ToString();
-                properties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                properties.Type = typeof(TMessage).Name;
-
-                // Add IMessage properties as headers
-                properties.Headers = new Dictionary<string, object>
+                var properties = new BasicProperties
                 {
-                    { "TraceId", message.TraceId ?? string.Empty },
-                    { "ReferenceId", message.ReferenceId ?? string.Empty },
-                    { "CreatedTimestamp", message.CreatedTimestamp.ToString("O") },
-                    { "FailureCount", message.FailureCount }
+                    Persistent = true,
+                    MessageId = Guid.NewGuid().ToString(),
+                    Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+                    Type = typeof(TMessage).Name,
+                    Headers = new Dictionary<string, object?>
+                    {
+                        { "TraceId", message.TraceId ?? string.Empty },
+                        { "ReferenceId", message.ReferenceId ?? string.Empty },
+                        { "CreatedTimestamp", message.CreatedTimestamp.ToString("O") },
+                        { "FailureCount", message.FailureCount }
+                    }
                 };
 
                 // Add metadata as headers
                 if (metadata != null)
                     foreach (var kvp in metadata)
-                        properties.Headers[kvp.Key] = kvp.Value;
+                        properties.Headers![kvp.Key] = kvp.Value;
 
                 // Publish message
-                channel.BasicPublish(
+                await channel.BasicPublishAsync(
                     topicName,
                     "#", // Topic exchange with # routing key matches all bindings
-                    properties,
-                    body);
+                    mandatory: false,
+                    basicProperties: properties,
+                    body: body,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug(
                     "Published message to topic {TopicName}. MessageId: {MessageId}, TraceId: {TraceId}",
@@ -104,8 +107,8 @@ public class RabbitMqTopicPublisher : ITopicPublisher
             }
             finally
             {
-                channel.Close();
-                channel.Dispose();
+                await channel.CloseAsync(cancellationToken).ConfigureAwait(false);
+                await channel.DisposeAsync().ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -117,7 +120,5 @@ public class RabbitMqTopicPublisher : ITopicPublisher
                 message.TraceId);
             throw;
         }
-
-        return Task.CompletedTask;
     }
 }

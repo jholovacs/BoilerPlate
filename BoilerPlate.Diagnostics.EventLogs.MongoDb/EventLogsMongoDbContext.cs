@@ -36,6 +36,7 @@ public sealed class EventLogsMongoDbContext : BaseEventLogDbContext
             entity.Property(e => e.Timestamp).HasElementName("Timestamp");
             entity.Property(e => e.Level).HasElementName("Level");
             entity.Property(e => e.Source).HasElementName("Source");
+            entity.Property(e => e.MessageTemplate).HasElementName("MessageTemplate");
             entity.Property(e => e.Message).HasElementName("Message");
             entity.Property(e => e.TraceId).HasElementName("TraceId");
             entity.Property(e => e.SpanId).HasElementName("SpanId");

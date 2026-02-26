@@ -46,6 +46,7 @@ public class AuthenticationServiceTests : IDisposable
             _topicPublisherMock.Object,
             null,
             null,
+            null,
             _passwordPolicyService,
             _loggerMock.Object);
     }
