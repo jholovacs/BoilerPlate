@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { LoginComponent } from './features/auth/login/login.component';
 import { AuditLogsComponent } from './features/diagnostics/audit-logs/audit-logs.component';
 import { EventLogsComponent } from './features/diagnostics/event-logs/event-logs.component';
+import { RabbitMqQueuesComponent } from './features/diagnostics/rabbitmq-queues/rabbitmq-queues.component';
 import { TenantManagementComponent } from './features/tenants/tenant-management/tenant-management.component';
 import { TenantEditComponent } from './features/tenants/tenant-edit/tenant-edit.component';
 import { MyTenantSettingsComponent } from './features/tenants/my-tenant-settings/my-tenant-settings.component';
@@ -78,6 +79,11 @@ export const routes: Routes = [
     path: 'audit-logs',
     component: AuditLogsComponent,
     canActivate: [diagnosticsGuard]
+  },
+  {
+    path: 'rabbitmq-queues',
+    component: RabbitMqQueuesComponent,
+    canActivate: [authGuard]
   },
   {
     path: 'account',

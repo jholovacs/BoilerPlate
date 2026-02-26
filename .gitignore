@@ -14,7 +14,7 @@ tls-certs/
 *.cer
 *.pfx
 .env
-
+nul
 
 # User-specific files
 *.rsuser

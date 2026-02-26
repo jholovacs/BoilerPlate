@@ -10,4 +10,9 @@ public static class AuthorizationPolicies
     ///     others (e.g. Tenant Administrators) are restricted to their tenant.
     /// </summary>
     public const string DiagnosticsODataAccess = "DiagnosticsODataAccessPolicy";
+
+    /// <summary>
+    ///     Policy for RabbitMQ management: Service Administrators only (infrastructure-level).
+    /// </summary>
+    public const string ServiceAdministratorOnly = "ServiceAdministratorOnlyPolicy";
 }

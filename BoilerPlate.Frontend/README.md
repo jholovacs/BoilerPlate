@@ -19,7 +19,9 @@ Angular frontend application for BoilerPlate Authentication system.
 | Environment | URL | Notes |
 |-------------|-----|-------|
 | Local dev (`ng serve`) | http://localhost:4200 | Auth API typically at http://localhost:8080 (see `auth-api.config.json`) |
-| Docker (nginx) | https://localhost:4200 | Same origin; API proxied at `/api`, RabbitMQ at `/amqp` |
+| Docker (nginx) | **https://localhost:4200** | **Use HTTPS** – nginx listens on 443; `http://` returns 400 |
+
+**Important:** In Docker, the frontend is served over HTTPS only. Use `https://localhost:4200` (accept the self-signed cert when prompted). Using `http://` will return "400 Bad Request - plain HTTP request was sent to HTTPS port".
 
 ### Role-Based Access
 
@@ -33,13 +35,7 @@ Angular frontend application for BoilerPlate Authentication system.
 
 ### RabbitMQ Management
 
-Service Administrators see a **RabbitMQ Management** link in the side nav. Clicking it:
-
-1. Requests a short-lived access token from `/api/rabbitmq/access`
-2. Opens the RabbitMQ Management UI in a new tab with credentials automatically supplied
-3. No manual login required (admin credentials from `RABBITMQ_CONNECTION_STRING` are injected by the proxy)
-
-If the access request fails, the link falls back to `/amqp/` (nginx proxy) where the user can log in manually.
+Service Administrators see a **RabbitMQ Management** link in the side nav. It opens `/amqp/` (nginx proxy to RabbitMQ) in a new tab. Log in with the RabbitMQ admin credentials (default: `admin` / `SecurePassword123!`).
 
 ### Diagnostics (Event Logs, Audit Logs)
 
@@ -127,10 +123,6 @@ The frontend communicates with the following API endpoints:
 - `PUT /api/tenants/{id}` – Update tenant
 - `DELETE /api/tenants/{id}` – Delete tenant
 
-### RabbitMQ Proxy (Service Administrators)
-
-- `GET auth://api/rabbitmq/access` – Obtain access cookie and proxy URL (Bearer token required)
-- `GET /api/rabbitmq/` – Proxied RabbitMQ Management UI (cookie required)
 
 ### Diagnostics
 

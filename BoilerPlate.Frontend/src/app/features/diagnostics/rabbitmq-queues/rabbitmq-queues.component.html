@@ -1,0 +1,133 @@
+<div class="container">
+  <div class="header">
+    <h1>RabbitMQ Queues</h1>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="load()" [disabled]="isLoading">Refresh</button>
+      <button class="btn btn-secondary" (click)="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div *ngIf="errorMessage" class="error-message">{{ errorMessage }}</div>
+
+  <div *ngIf="isLoading" class="loading">Loading RabbitMQ overview...</div>
+
+  <div *ngIf="overview && !isLoading" class="card overview-card">
+    <h2>Overview</h2>
+    <div class="overview-grid">
+      <div class="overview-item">
+        <span class="label">Version</span>
+        <span class="value">{{ getVal(overview, 'rabbitmq_version') || '-' }}</span>
+      </div>
+      <div class="overview-item" *ngIf="getVal(overview, 'queue_totals') as qt">
+        <span class="label">Total messages</span>
+        <span class="value">{{ getVal($any(qt), 'messages') || '-' }}</span>
+      </div>
+      <div class="overview-item" *ngIf="getVal(overview, 'queue_totals') as qt">
+        <span class="label">Ready</span>
+        <span class="value">{{ getVal($any(qt), 'messages_ready') || '-' }}</span>
+      </div>
+      <div class="overview-item" *ngIf="getVal(overview, 'queue_totals') as qt">
+        <span class="label">Unacked</span>
+        <span class="value">{{ getVal($any(qt), 'messages_unacknowledged') || '-' }}</span>
+      </div>
+      <div class="overview-item" *ngIf="getVal(overview, 'object_totals') as ot">
+        <span class="label">Queues</span>
+        <span class="value">{{ getVal($any(ot), 'queues') || '-' }}</span>
+      </div>
+      <div class="overview-item" *ngIf="getVal(overview, 'object_totals') as ot">
+        <span class="label">Exchanges</span>
+        <span class="value">{{ getVal($any(ot), 'exchanges') || '-' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Queues</h2>
+    <div *ngIf="queues.length === 0" class="empty-state">No queues found.</div>
+    <table *ngIf="queues.length > 0" class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>VHost</th>
+          <th>Messages</th>
+          <th>Ready</th>
+          <th>Unacked</th>
+          <th>Consumers</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let q of queues">
+          <td class="col-name">{{ getVal(q, 'name') }}</td>
+          <td class="col-vhost">{{ getVal(q, 'vhost') }}</td>
+          <td>{{ getVal(q, 'messages') }}</td>
+          <td>{{ getVal(q, 'messages_ready') }}</td>
+          <td>{{ getVal(q, 'messages_unacknowledged') }}</td>
+          <td>{{ getVal(q, 'consumers') }}</td>
+          <td class="col-actions">
+            <button
+              class="btn btn-sm btn-secondary"
+              (click)="getQueueMessages(getStr(q, 'vhost'), getStr(q, 'name'))"
+              [disabled]="loadingMessages !== null"
+              title="Get up to 5 messages (for troubleshooting)"
+            >
+              {{ loadingMessages === getVal(q, 'name') ? '...' : 'Peek' }}
+            </button>
+            <button
+              class="btn btn-sm btn-danger"
+              (click)="purgeQueue(getStr(q, 'vhost'), getStr(q, 'name'))"
+              [disabled]="purgingQueue !== null"
+              title="Purge all messages"
+            >
+              {{ purgingQueue === getVal(q, 'name') ? '...' : 'Purge' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Exchanges (Topics)</h2>
+    <div *ngIf="exchanges.length === 0" class="empty-state">No exchanges found.</div>
+    <table *ngIf="exchanges.length > 0" class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>VHost</th>
+          <th>Type</th>
+          <th>Durable</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let e of exchanges">
+          <td class="col-name">{{ getVal(e, 'name') }}</td>
+          <td class="col-vhost">{{ getVal(e, 'vhost') }}</td>
+          <td>{{ getVal(e, 'type') }}</td>
+          <td>{{ getVal(e, 'durable') ? 'Yes' : 'No' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Queue messages -->
+<div *ngIf="queueMessages !== null" class="modal-overlay" (click)="closeMessages()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Messages in {{ queueMessagesFor }}</h3>
+      <button type="button" class="modal-close" (click)="closeMessages()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-note">Up to 5 messages (peeked and removed from queue).</p>
+      <div *ngIf="queueMessages.length === 0" class="empty-state">No messages in queue.</div>
+      <div *ngFor="let m of queueMessages; let i = index" class="message-block">
+        <strong>Message {{ i + 1 }}</strong>
+        <pre class="message-payload">{{ formatPayload(getVal(m, 'payload')) }}</pre>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeMessages()">Close</button>
+    </div>
+  </div>
+</div>

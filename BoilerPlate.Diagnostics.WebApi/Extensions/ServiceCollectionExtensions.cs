@@ -25,6 +25,8 @@ public static class ServiceCollectionExtensions
         {
             options.AddPolicy(AuthorizationPolicies.DiagnosticsODataAccess, policy =>
                 policy.RequireRole("Service Administrator", "Tenant Administrator"));
+            options.AddPolicy(AuthorizationPolicies.ServiceAdministratorOnly, policy =>
+                policy.RequireRole("Service Administrator"));
         });
 
         var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();

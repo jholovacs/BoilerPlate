@@ -23,6 +23,27 @@ builder.Services.AddDiagnosticsJwtAuthentication(builder.Configuration);
 builder.Services.AddRabbitMqServiceBus(builder.Configuration);
 builder.Services.AddHostedService<EventLogRealtimeService>();
 
+// RabbitMQ Management API (queue/exchange monitoring, purge) - Service Administrators only
+builder.Services.Configure<RabbitMqManagementOptions>(options =>
+{
+    builder.Configuration.GetSection(RabbitMqManagementOptions.SectionName).Bind(options);
+    var connStr = Environment.GetEnvironmentVariable("RABBITMQ_CONNECTION_STRING")
+        ?? builder.Configuration["RabbitMq:ConnectionString"]
+        ?? "";
+    if (!string.IsNullOrWhiteSpace(connStr) && Uri.TryCreate(connStr, UriKind.Absolute, out var uri))
+    {
+        if (string.IsNullOrWhiteSpace(options.BaseUrl))
+            options.BaseUrl = $"http://{uri.Host}:15672";
+        if (string.IsNullOrWhiteSpace(options.Username) && !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            var parts = uri.UserInfo.Split(':', 2);
+            options.Username = parts[0];
+            options.Password = parts.Length > 1 ? parts[1] : "";
+        }
+    }
+});
+builder.Services.AddHttpClient<RabbitMqManagementService>();
+
 builder.Services.AddSignalR();
 
 builder.Services.AddCors(options =>

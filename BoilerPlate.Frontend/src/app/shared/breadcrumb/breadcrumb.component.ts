@@ -61,6 +61,11 @@ export class BreadcrumbComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (segments[0] === 'rabbitmq-queues') {
+      this.items.push({ label: 'RabbitMQ Queues', url: '/rabbitmq-queues' });
+      return;
+    }
+
     if (segments[0] === 'tenants') {
       const idIndex = 1;
       const id = segments[idIndex];

@@ -12,12 +12,12 @@ namespace BoilerPlate.Authentication.WebApi.Controllers;
 ///     logged in via Basic Auth injected by this proxy.
 /// </summary>
 [ApiController]
-[Route("api/rabbitmq")]
+[Route("rabbitmq-proxy")]
 public class RabbitMqProxyController : ControllerBase
 {
     private const string CookieName = "rabbitmq_proxy_access";
     private const int CookieMaxAgeSeconds = 300; // 5 minutes
-    private const string ProxyBasePath = "/api/rabbitmq";
+    private const string ProxyBasePath = "/rabbitmq-proxy";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<RabbitMqProxyController> _logger;
@@ -56,7 +56,7 @@ public class RabbitMqProxyController : ControllerBase
         var token = Guid.NewGuid().ToString("N");
         var cookieOptions = new CookieOptions
         {
-            Path = "/api/rabbitmq",
+            Path = "/rabbitmq-proxy",
             HttpOnly = true,
             Secure = Request.IsHttps,
             SameSite = SameSiteMode.Lax,
@@ -107,11 +107,11 @@ public class RabbitMqProxyController : ControllerBase
     private async Task<IActionResult> Proxy(HttpMethod method, string? path, Stream? body, CancellationToken cancellationToken)
     {
         if (!_options.IsConfigured)
-            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            return RabbitMqErrorPage(503, "RabbitMQ Management proxy is not configured.");
 
         if (!Request.Cookies.TryGetValue(CookieName, out var token) || !_options.ValidateAccessToken(token))
         {
-            return Unauthorized(new { error = "Invalid or expired RabbitMQ proxy access. Please use the RabbitMQ Management link again." });
+            return RabbitMqErrorPage(401, "Invalid or expired RabbitMQ proxy access. Please use the RabbitMQ Management link from the app (Service Administrators only).");
         }
 
         var rabbitPath = string.IsNullOrEmpty(path) ? "" : path.TrimStart('/');
@@ -134,7 +134,7 @@ public class RabbitMqProxyController : ControllerBase
         try
         {
             var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
             if (!response.IsSuccessStatusCode)
             {
@@ -160,22 +160,41 @@ public class RabbitMqProxyController : ControllerBase
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "Failed to proxy request to RabbitMQ Management at {Url}", targetUrl);
-            return StatusCode(StatusCodes.Status502BadGateway, new { error = "Unable to reach RabbitMQ Management" });
+            return RabbitMqErrorPage(502, "Unable to reach RabbitMQ Management. Ensure RabbitMQ is running.");
         }
+    }
+
+    private static ContentResult RabbitMqErrorPage(int statusCode, string message)
+    {
+        var html = $"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"><title>RabbitMQ Management</title></head>
+            <body style="font-family:sans-serif;max-width:600px;margin:2rem auto;padding:1rem;">
+            <h1>RabbitMQ Management</h1>
+            <p>{System.Net.WebUtility.HtmlEncode(message)}</p>
+            <p><a href="/">Return to app</a></p>
+            </body>
+            </html>
+            """;
+        return new ContentResult { StatusCode = statusCode, Content = html, ContentType = "text/html; charset=utf-8" };
     }
 
     private static string RewritePaths(string content)
     {
         // RabbitMQ Management UI uses absolute paths. Rewrite so they go through our proxy.
+        // Must replace /api/ first to avoid double-rewriting; use negative lookahead for href/src/url/action.
         var prefix = ProxyBasePath;
         content = Regex.Replace(content, @"<head>", $"<head><base href=\"{prefix}/\">", RegexOptions.IgnoreCase);
-        content = Regex.Replace(content, @"href=""/", $"href=\"{prefix}/");
-        content = Regex.Replace(content, @"src=""/", $"src=\"{prefix}/");
+        // Replace "/api/ first so href="/api/..." becomes href="/api/rabbitmq/api/..."
         content = Regex.Replace(content, @"""\/api\/", $"\"{prefix}/api/");
         content = Regex.Replace(content, @"'\/api\/", $"'{prefix}/api/");
-        content = Regex.Replace(content, @"url\(""/", $"url(\"{prefix}/");
-        content = Regex.Replace(content, @"url\('/", $"url('{prefix}/");
-        content = Regex.Replace(content, @"action=""/", $"action=\"{prefix}/");
+        // Use negative lookahead (?!api\/) to avoid double-rewriting href="/api/..." etc.
+        content = Regex.Replace(content, @"href=""/(?!api/)", $"href=\"{prefix}/");
+        content = Regex.Replace(content, @"src=""/(?!api/)", $"src=\"{prefix}/");
+        content = Regex.Replace(content, @"url\(""/(?!api/)", $"url(\"{prefix}/");
+        content = Regex.Replace(content, @"url\('/(?!api/)", $"url('{prefix}/");
+        content = Regex.Replace(content, @"action=""/(?!api/)", $"action=\"{prefix}/");
         return content;
     }
 }

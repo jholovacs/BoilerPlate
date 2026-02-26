@@ -63,6 +63,12 @@
   width: 100%;
 }
 
+.table th,
+.table td {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 .col-timestamp {
   white-space: nowrap;
   font-size: 13px;
