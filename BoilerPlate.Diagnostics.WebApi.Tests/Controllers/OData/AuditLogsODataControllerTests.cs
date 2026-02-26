@@ -88,22 +88,22 @@ public class AuditLogsODataControllerTests
     }
 
     /// <summary>
-    ///     Scenario: $top=1000 is passed (exceeds MaxTop 500).
-    ///     Expected: QueryAsync called with top=500.
+    ///     Scenario: $top=3000 is passed (exceeds MaxTop 2500).
+    ///     Expected: QueryAsync called with top=2500.
     /// </summary>
     [Fact]
     public async Task Get_WithTopExceedingMax_CapsAtMaxTop()
     {
         _rawQueryServiceMock
-            .Setup(s => s.QueryAsync(It.IsAny<Guid?>(), It.IsAny<bool>(), 500, It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.QueryAsync(It.IsAny<Guid?>(), It.IsAny<bool>(), 2500, It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<AuditLogEntry>(), 0L));
 
         var controller = CreateController(serviceAdmin: true);
-        SetupRequestQuery(controller, top: "1000");
+        SetupRequestQuery(controller, top: "3000");
 
         await controller.Get(CancellationToken.None);
 
-        _rawQueryServiceMock.Verify(s => s.QueryAsync(null, true, 500, 0, false, It.IsAny<CancellationToken>()), Times.Once);
+        _rawQueryServiceMock.Verify(s => s.QueryAsync(null, true, 2500, 0, false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
