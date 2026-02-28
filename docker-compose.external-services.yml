@@ -1,0 +1,68 @@
+# Override for using external PostgreSQL, MongoDB, and RabbitMQ (managed instances).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml -f docker-compose.external-services.yml up -d
+#
+# Required in .env (all three when using this override):
+#   POSTGRES_CONNECTION_STRING - e.g. Host=myserver.postgres.database.azure.com;Port=5432;Database=BoilerPlateAuth;Username=myuser;Password=xxx;Ssl Mode=Require
+#   MONGODB_CONNECTION_STRING  - e.g. mongodb+srv://user:pass@cluster.mongodb.net/logs?retryWrites=true&w=majority
+#   RABBITMQ_CONNECTION_STRING - e.g. amqps://user:pass@host.cloudamqp.com/vhost
+#
+# Optional: separate MongoDB connections for audit logs vs event logs:
+#   AUDIT_LOGS_MONGODB_CONNECTION_STRING - defaults to MONGODB_CONNECTION_STRING
+#   EVENT_LOGS_MONGODB_CONNECTION_STRING - defaults to MONGODB_CONNECTION_STRING
+#
+# Internal postgres/mongodb/rabbitmq are not started (profile: internal).
+# To mix internal and external, use ./install-k8s.sh for Kubernetes instead.
+
+services:
+  postgres:
+    profiles:
+      - internal
+
+  mongodb:
+    profiles:
+      - internal
+
+  rabbitmq:
+    profiles:
+      - internal
+
+  otel-collector:
+    depends_on: []
+
+  webapi:
+    environment:
+      ConnectionStrings__PostgreSqlConnection: ${POSTGRES_CONNECTION_STRING}
+      RABBITMQ_CONNECTION_STRING: ${RABBITMQ_CONNECTION_STRING}
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+
+  audit:
+    environment:
+      MONGODB_CONNECTION_STRING: ${AUDIT_LOGS_MONGODB_CONNECTION_STRING:-${MONGODB_CONNECTION_STRING}}
+      RABBITMQ_CONNECTION_STRING: ${RABBITMQ_CONNECTION_STRING}
+    depends_on: []
+
+  event-logs:
+    environment:
+      MONGODB_CONNECTION_STRING: ${EVENT_LOGS_MONGODB_CONNECTION_STRING:-${MONGODB_CONNECTION_STRING}}
+      RABBITMQ_CONNECTION_STRING: ${RABBITMQ_CONNECTION_STRING}
+    depends_on: []
+
+  diagnostics:
+    environment:
+      ConnectionStrings__AuditLogsMongoConnection: ${AUDIT_LOGS_MONGODB_CONNECTION_STRING:-${MONGODB_CONNECTION_STRING}}
+      ConnectionStrings__EventLogsMongoConnection: ${EVENT_LOGS_MONGODB_CONNECTION_STRING:-${MONGODB_CONNECTION_STRING}}
+      RABBITMQ_CONNECTION_STRING: ${RABBITMQ_CONNECTION_STRING}
+    depends_on:
+      webapi:
+        condition: service_started
+      otel-collector:
+        condition: service_healthy
+
+  frontend:
+    depends_on:
+      webapi:
+        condition: service_started
+      diagnostics:
+        condition: service_started

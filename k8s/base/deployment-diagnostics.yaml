@@ -37,11 +37,16 @@ spec:
               value: BoilerPlate.Authentication
             - name: JwtSettings__Audience
               value: BoilerPlate.API
-            - name: MONGODB_CONNECTION_STRING
+            - name: ConnectionStrings__AuditLogsMongoConnection
               valueFrom:
                 secretKeyRef:
                   name: boilerplate-secrets
-                  key: mongodb-connection
+                  key: audit-logs-mongodb-connection
+            - name: ConnectionStrings__EventLogsMongoConnection
+              valueFrom:
+                secretKeyRef:
+                  name: boilerplate-secrets
+                  key: event-logs-mongodb-connection
             - name: RABBITMQ_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:

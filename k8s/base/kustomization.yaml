@@ -6,12 +6,8 @@ namespace: boilerplate
 resources:
   - namespace.yaml
   - configmap-otel-collector.yaml
-  - configmap-rabbitmq.yaml
   - configmap-frontend-nginx.yaml
-  - pvc-postgres.yaml
-  - deployment-postgres.yaml
-  - deployment-rabbitmq.yaml
-  - deployment-mongodb.yaml
+  - pvc-otel-collector.yaml
   - deployment-otel-collector.yaml
   - deployment-webapi.yaml
   - deployment-audit.yaml

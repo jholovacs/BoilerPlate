@@ -23,7 +23,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: boilerplate-secrets
-                  key: mongodb-connection
+                  key: event-logs-mongodb-connection
             - name: RABBITMQ_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:

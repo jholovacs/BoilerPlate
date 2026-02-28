@@ -1,0 +1,40 @@
+# Test overlay - installer generates this with user choices
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: boilerplate
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/infrastructure-postgres
+  - ../../components/infrastructure-mongodb
+  - ../../components/infrastructure-rabbitmq
+
+patches:
+  - path: namespace-patch.yaml
+    target:
+      kind: Namespace
+      name: boilerplate
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: boilerplate
+
+images:
+  - name: boilerplate-authentication-webapi:latest
+    newName: ghcr.io/myorg/boilerplate-authentication-webapi
+    newTag: latest
+  - name: boilerplate-services-audit:latest
+    newName: ghcr.io/myorg/boilerplate-services-audit
+    newTag: latest
+  - name: boilerplate-services-event-logs:latest
+    newName: ghcr.io/myorg/boilerplate-services-event-logs
+    newTag: latest
+  - name: boilerplate-diagnostics-webapi:latest
+    newName: ghcr.io/myorg/boilerplate-diagnostics-webapi
+    newTag: latest
+  - name: boilerplate-frontend:latest
+    newName: ghcr.io/myorg/boilerplate-frontend
+    newTag: latest

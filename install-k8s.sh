@@ -86,9 +86,74 @@ main() {
   # Remove trailing slash from registry
   IMAGE_REGISTRY="${IMAGE_REGISTRY%/}"
 
-  prompt POSTGRES_PASSWORD "PostgreSQL password" "$(generate_password)" true
-  prompt RABBITMQ_PASSWORD "RabbitMQ password" "$(generate_password)" true
-  prompt MONGODB_PASSWORD "MongoDB password" "$(generate_password)" true
+  # --- Data services: internal (deployed in cluster) or external (managed instance) ---
+  log_info "Data services: use internal (deployed in cluster) or external (your managed PostgreSQL, MongoDB, RabbitMQ)?"
+  echo ""
+
+  # PostgreSQL
+  echo "  PostgreSQL (auth database):"
+  echo "    1) Internal - deploy PostgreSQL in cluster (default)"
+  echo "    2) External - use my own (Azure Database, AWS RDS, etc.)"
+  prompt POSTGRES_MODE "Choice [1-2]" "1"
+  USE_INTERNAL_POSTGRES="true"
+  if [ "$POSTGRES_MODE" = "2" ]; then
+    USE_INTERNAL_POSTGRES="false"
+    echo "    Example: Host=myserver.postgres.database.azure.com;Port=5432;Database=BoilerPlateAuth;Username=myuser;Password=xxx;Ssl Mode=Require"
+    prompt POSTGRES_CONNECTION "PostgreSQL connection string" "" true
+    if [ -z "$POSTGRES_CONNECTION" ]; then
+      log_error "PostgreSQL connection string is required for external mode."
+      exit 1
+    fi
+  else
+    prompt POSTGRES_PASSWORD "PostgreSQL password (internal)" "$(generate_password)" true
+    POSTGRES_CONNECTION="Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD}"
+  fi
+
+  # MongoDB (audit logs and event logs can use different connections)
+  echo ""
+  echo "  MongoDB (audit logs and event logs - can use same or different connections):"
+  echo "    1) Internal - deploy MongoDB in cluster (default)"
+  echo "    2) External - use my own (MongoDB Atlas, Azure Cosmos DB, etc.)"
+  prompt MONGODB_MODE "Choice [1-2]" "1"
+  USE_INTERNAL_MONGODB="true"
+  if [ "$MONGODB_MODE" = "2" ]; then
+    USE_INTERNAL_MONGODB="false"
+    echo "    Example: mongodb+srv://user:pass@cluster.mongodb.net/logs?retryWrites=true&w=majority"
+    prompt AUDIT_LOGS_MONGODB_CONNECTION "Audit logs MongoDB connection string" "" true
+    if [ -z "$AUDIT_LOGS_MONGODB_CONNECTION" ]; then
+      log_error "Audit logs MongoDB connection string is required for external mode."
+      exit 1
+    fi
+    prompt EVENT_LOGS_MONGODB_CONNECTION "Event logs MongoDB connection string (leave empty to use same as audit logs)" "" true
+    if [ -z "$EVENT_LOGS_MONGODB_CONNECTION" ]; then
+      EVENT_LOGS_MONGODB_CONNECTION="$AUDIT_LOGS_MONGODB_CONNECTION"
+    fi
+  else
+    prompt MONGODB_PASSWORD "MongoDB password (internal)" "$(generate_password)" true
+    AUDIT_LOGS_MONGODB_CONNECTION="mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/audit?authSource=admin"
+    EVENT_LOGS_MONGODB_CONNECTION="mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/logs?authSource=admin"
+  fi
+
+  # RabbitMQ
+  echo ""
+  echo "  RabbitMQ (message bus):"
+  echo "    1) Internal - deploy RabbitMQ in cluster (default)"
+  echo "    2) External - use my own (CloudAMQP, Amazon MQ, etc.)"
+  prompt RABBITMQ_MODE "Choice [1-2]" "1"
+  USE_INTERNAL_RABBITMQ="true"
+  if [ "$RABBITMQ_MODE" = "2" ]; then
+    USE_INTERNAL_RABBITMQ="false"
+    echo "    Example: amqps://user:pass@host.cloudamqp.com/vhost"
+    prompt RABBITMQ_CONNECTION "RabbitMQ connection string" "" true
+    if [ -z "$RABBITMQ_CONNECTION" ]; then
+      log_error "RabbitMQ connection string is required for external mode."
+      exit 1
+    fi
+  else
+    prompt RABBITMQ_PASSWORD "RabbitMQ password (internal)" "$(generate_password)" true
+    RABBITMQ_CONNECTION="amqp://admin:${RABBITMQ_PASSWORD}@rabbitmq:5672/"
+  fi
+
   prompt ADMIN_PASSWORD "Admin user password (first login)" "$(generate_password)" true
   prompt ADMIN_USERNAME "Admin username" "admin"
 
@@ -104,11 +169,6 @@ main() {
   JWT_PUBLIC_KEY=$(cat "$PROJECT_ROOT/jwt-keys/public_key.pem" | base64 | tr -d '\n')
 
   JWT_ISSUER_URL="https://${DOMAIN}"
-
-  # Connection strings
-  POSTGRES_CONNECTION="Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD}"
-  MONGODB_CONNECTION="mongodb://admin:${MONGODB_PASSWORD}@mongodb:27017/logs?authSource=admin"
-  RABBITMQ_CONNECTION="amqp://admin:${RABBITMQ_PASSWORD}@rabbitmq:5672/"
 
   # TLS
   log_info "TLS certificate for Ingress..."
@@ -176,6 +236,22 @@ metadata:
     app.kubernetes.io/name: boilerplate
 PATCH
 
+  # Build components list based on internal/external choices
+  COMPONENTS=""
+  [ "$USE_INTERNAL_POSTGRES" = "true" ] && COMPONENTS="${COMPONENTS}  - ../../components/infrastructure-postgres
+"
+  [ "$USE_INTERNAL_MONGODB" = "true" ] && COMPONENTS="${COMPONENTS}  - ../../components/infrastructure-mongodb
+"
+  [ "$USE_INTERNAL_RABBITMQ" = "true" ] && COMPONENTS="${COMPONENTS}  - ../../components/infrastructure-rabbitmq
+"
+
+  COMPONENTS_SECTION=""
+  if [ -n "$COMPONENTS" ]; then
+    COMPONENTS_SECTION="components:
+${COMPONENTS}
+"
+  fi
+
   cat > "$OVERLAY_DIR/kustomization.yaml" << EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -185,6 +261,7 @@ namespace: ${NAMESPACE}
 resources:
   - ../../base
 
+${COMPONENTS_SECTION}
 patches:
   - path: namespace-patch.yaml
     target:
@@ -222,18 +299,23 @@ EOF
   log_info "Creating Kubernetes secrets..."
   kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
+  SECRET_ARGS=(
+    --from-literal=admin-username="$ADMIN_USERNAME"
+    --from-literal=admin-password="$ADMIN_PASSWORD"
+    --from-literal=postgres-connection="$POSTGRES_CONNECTION"
+    --from-literal=audit-logs-mongodb-connection="$AUDIT_LOGS_MONGODB_CONNECTION"
+    --from-literal=event-logs-mongodb-connection="$EVENT_LOGS_MONGODB_CONNECTION"
+    --from-literal=rabbitmq-connection="$RABBITMQ_CONNECTION"
+    --from-literal=jwt-private-key="$JWT_PRIVATE_KEY"
+    --from-literal=jwt-public-key="$JWT_PUBLIC_KEY"
+    --from-literal=jwt-issuer-url="$JWT_ISSUER_URL"
+  )
+  [ "$USE_INTERNAL_POSTGRES" = "true" ] && SECRET_ARGS+=(--from-literal=postgres-password="$POSTGRES_PASSWORD")
+  [ "$USE_INTERNAL_MONGODB" = "true" ] && SECRET_ARGS+=(--from-literal=mongodb-password="$MONGODB_PASSWORD")
+  [ "$USE_INTERNAL_RABBITMQ" = "true" ] && SECRET_ARGS+=(--from-literal=rabbitmq-password="$RABBITMQ_PASSWORD")
+
   kubectl create secret generic boilerplate-secrets -n "$NAMESPACE" \
-    --from-literal=postgres-password="$POSTGRES_PASSWORD" \
-    --from-literal=rabbitmq-password="$RABBITMQ_PASSWORD" \
-    --from-literal=mongodb-password="$MONGODB_PASSWORD" \
-    --from-literal=admin-username="$ADMIN_USERNAME" \
-    --from-literal=admin-password="$ADMIN_PASSWORD" \
-    --from-literal=postgres-connection="$POSTGRES_CONNECTION" \
-    --from-literal=mongodb-connection="$MONGODB_CONNECTION" \
-    --from-literal=rabbitmq-connection="$RABBITMQ_CONNECTION" \
-    --from-literal=jwt-private-key="$JWT_PRIVATE_KEY" \
-    --from-literal=jwt-public-key="$JWT_PUBLIC_KEY" \
-    --from-literal=jwt-issuer-url="$JWT_ISSUER_URL" \
+    "${SECRET_ARGS[@]}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
   # TLS secret
@@ -271,20 +353,31 @@ EOF
   log_info "Applying Kubernetes manifests..."
   kubectl apply -k "$OVERLAY_DIR"
 
-  # Migrations
-  log_info "Waiting for PostgreSQL to be ready..."
-  kubectl wait --for=condition=available deployment/postgres -n "$NAMESPACE" --timeout=120s 2>/dev/null || true
-
+  # Migrations (PostgreSQL - required for auth)
   if command -v dotnet >/dev/null 2>&1 && PATH="$HOME/.dotnet/tools:$PATH" dotnet ef --version >/dev/null 2>&1; then
-    log_info "Running database migrations..."
-    cd "$PROJECT_ROOT"
-    kubectl port-forward -n "$NAMESPACE" svc/postgres 5432:5432 &
-    PF_PID=$!
-    sleep 3
-    (PATH="$HOME/.dotnet/tools:$PATH" ConnectionStrings__PostgreSqlConnection="Host=localhost;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD}" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>/dev/null) || log_warn "Migration failed or skipped. Run manually: kubectl port-forward svc/postgres 5432:5432, then make migrate"
-    kill $PF_PID 2>/dev/null || true
+    if [ "$USE_INTERNAL_POSTGRES" = "true" ]; then
+      log_info "Waiting for PostgreSQL to be ready..."
+      kubectl wait --for=condition=available deployment/postgres -n "$NAMESPACE" --timeout=120s 2>/dev/null || true
+      log_info "Running database migrations..."
+      cd "$PROJECT_ROOT"
+      kubectl port-forward -n "$NAMESPACE" svc/postgres 5432:5432 &
+      PF_PID=$!
+      sleep 3
+      (PATH="$HOME/.dotnet/tools:$PATH" ConnectionStrings__PostgreSqlConnection="Host=localhost;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD}" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>/dev/null) || log_warn "Migration failed or skipped. Run manually: kubectl port-forward svc/postgres 5432:5432, then make migrate"
+      kill $PF_PID 2>/dev/null || true
+    else
+      log_info "Running database migrations against external PostgreSQL..."
+      cd "$PROJECT_ROOT"
+      (PATH="$HOME/.dotnet/tools:$PATH" ConnectionStrings__PostgreSqlConnection="$POSTGRES_CONNECTION" dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext 2>/dev/null) || log_warn "Migration failed. Run manually: ConnectionStrings__PostgreSqlConnection='<your-connection-string>' dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext"
+    fi
   else
-    log_warn "dotnet ef not found. Run migrations manually after postgres is ready."
+    log_warn "dotnet ef not found. Run migrations manually."
+    if [ "$USE_INTERNAL_POSTGRES" = "true" ]; then
+      log_warn "  kubectl port-forward -n $NAMESPACE svc/postgres 5432:5432"
+      log_warn "  make migrate POSTGRES_PASSWORD=<password>"
+    else
+      log_warn "  ConnectionStrings__PostgreSqlConnection='<connection-string>' dotnet ef database update --project BoilerPlate.Authentication.Database.PostgreSql --startup-project BoilerPlate.Authentication.WebApi --context AuthenticationDbContext"
+    fi
   fi
 
   echo ""

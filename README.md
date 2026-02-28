@@ -56,6 +56,8 @@ cp .env.production.example .env
 make setup-production
 ```
 
+**External services:** To use your own PostgreSQL, MongoDB, or RabbitMQ (managed instances), add `docker-compose.external-services.yml` and set `POSTGRES_CONNECTION_STRING`, `MONGODB_CONNECTION_STRING`, `RABBITMQ_CONNECTION_STRING` in `.env`.
+
 TLS certs: place in `tls-certs/` or set `TLS_CERT_PATH`, `TLS_KEY_PATH` in `.env`
 
 See [PRODUCTION_HARDENING.md](PRODUCTION_HARDENING.md) for full guide.
@@ -76,7 +78,10 @@ The script will prompt for:
 - **Namespace** – Target namespace (default: `boilerplate`)
 - **Domain** – Public hostname (e.g. `app.example.com`)
 - **Image registry** – Where to push/pull images (e.g. `ghcr.io/myorg`)
-- **Passwords** – PostgreSQL, RabbitMQ, MongoDB, admin (or auto-generate)
+- **PostgreSQL** – Internal (deployed in cluster) or external (your managed instance)
+- **MongoDB** – Internal or external (e.g. MongoDB Atlas)
+- **RabbitMQ** – Internal or external (e.g. CloudAMQP, Amazon MQ)
+- **Passwords** – For internal services only; external services use your connection strings
 - **TLS** – cert-manager, existing secret, or self-signed
 - **Build images** – Build and push Docker images now (y/n)
 

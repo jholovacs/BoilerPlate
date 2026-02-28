@@ -10,7 +10,12 @@ Use the root-level install script for guided installation:
 ./install-k8s.sh
 ```
 
-The script prompts for namespace, domain, image registry, passwords, and TLS options, then applies the manifests.
+The script prompts for:
+- Namespace, domain, image registry
+- **PostgreSQL**: Internal (deployed in cluster) or external (your managed instance, e.g. Azure Database, AWS RDS)
+- **MongoDB**: Internal or external (e.g. MongoDB Atlas, Azure Cosmos DB). When external, you can specify separate connections for audit logs vs event logs.
+- **RabbitMQ**: Internal or external (e.g. CloudAMQP, Amazon MQ)
+- Passwords (for internal services), TLS options
 
 ## Manual Install
 
@@ -32,7 +37,8 @@ kubectl create secret generic boilerplate-secrets -n boilerplate \
   --from-literal=admin-username=admin \
   --from-literal=admin-password='...' \
   --from-literal=postgres-connection='Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=...' \
-  --from-literal=mongodb-connection='mongodb://admin:...@mongodb:27017/logs?authSource=admin' \
+  --from-literal=audit-logs-mongodb-connection='mongodb://admin:...@mongodb:27017/audit?authSource=admin' \
+  --from-literal=event-logs-mongodb-connection='mongodb://admin:...@mongodb:27017/logs?authSource=admin' \
   --from-literal=rabbitmq-connection='amqp://admin:...@rabbitmq:5672/' \
   --from-literal=jwt-private-key='<base64>' \
   --from-literal=jwt-public-key='<base64>' \
