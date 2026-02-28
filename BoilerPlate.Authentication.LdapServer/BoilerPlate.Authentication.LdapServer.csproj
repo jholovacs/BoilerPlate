@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>LDAP server that authenticates against BoilerPlate authentication services and exposes directory data</Description>
+    <Copyright>Copyright (c) 2025 Jeremy Holovacs</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Flexinets.Ldap.Core" Version="1.0.86" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BoilerPlate.Authentication.Abstractions\BoilerPlate.Authentication.Abstractions.csproj" />
+    <ProjectReference Include="..\BoilerPlate.Authentication.Database\BoilerPlate.Authentication.Database.csproj" />
+    <ProjectReference Include="..\BoilerPlate.Authentication.Services\BoilerPlate.Authentication.Services.csproj" />
+  </ItemGroup>
+
+</Project>
