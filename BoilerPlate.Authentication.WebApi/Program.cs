@@ -321,6 +321,9 @@ try
         // Add admin user initialization service
         builder.Services.AddHostedService<AdminUserInitializationService>();
 
+        // Add rate limit config initialization (ensures default configs exist)
+        builder.Services.AddHostedService<RateLimitConfigInitializationService>();
+
         // Event logs are written by BoilerPlate.Services.EventLogs (consumes from RabbitMQ, writes to MongoDB)
     }
 
@@ -353,6 +356,9 @@ try
     // Skip UseHttpsRedirection: API runs behind nginx (HTTPS) in Docker; no HTTPS port configured.
     // CORS must be before UseRouting and endpoints
     app.UseCors();
+
+    // OAuth rate limiting - runs early to limit anonymous token/validate/authorize requests per IP
+    app.UseMiddleware<BoilerPlate.Authentication.WebApi.Middleware.OAuthRateLimitingMiddleware>();
 
     // Enable routing (required for route-based middleware to work correctly)
     app.UseRouting();

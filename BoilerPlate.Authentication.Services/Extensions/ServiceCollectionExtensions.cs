@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITenantVanityUrlService, TenantVanityUrlService>();
         services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IPasswordPolicyService, PasswordPolicyService>();
+        services.AddScoped<IRateLimitConfigService, RateLimitConfigService>();
 
         return services;
     }

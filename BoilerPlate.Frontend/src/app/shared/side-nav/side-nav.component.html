@@ -16,6 +16,9 @@
       <li *ngIf="authService.isServiceAdministrator()">
         <a routerLink="/rabbitmq-queues" routerLinkActive="active" class="nav-item">RabbitMQ Queues</a>
       </li>
+      <li *ngIf="authService.isServiceAdministrator()">
+        <a routerLink="/settings/rate-limiting" routerLinkActive="active" class="nav-item">Rate limiting</a>
+      </li>
       <li *ngIf="authService.canAccessDiagnostics()">
         <a routerLink="/event-logs" routerLinkActive="active" class="nav-item">Event logs</a>
       </li>

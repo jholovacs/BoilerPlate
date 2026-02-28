@@ -119,6 +119,14 @@ public class AuthenticationDbContext : BaseAuthDbContext
 
         // Explicit table name for password history (snake_case)
         builder.Entity<UserPasswordHistory>().ToTable("user_password_history");
+
+        // Configure RateLimitConfig for PostgreSQL
+        builder.Entity<RateLimitConfig>(entity =>
+        {
+            entity.ToTable("rate_limit_configs");
+            entity.Property(e => e.CreatedAt).HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnType("timestamp with time zone");
+        });
     }
 
     /// <summary>

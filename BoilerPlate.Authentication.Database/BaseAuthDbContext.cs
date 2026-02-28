@@ -71,6 +71,11 @@ public abstract class BaseAuthDbContext : IdentityDbContext<ApplicationUser, App
     public DbSet<UserPasswordHistory> UserPasswordHistories { get; set; } = null!;
 
     /// <summary>
+    ///     Rate limit configuration for OAuth and JWT endpoints
+    /// </summary>
+    public DbSet<RateLimitConfig> RateLimitConfigs { get; set; } = null!;
+
+    /// <summary>
     ///     Configures the model that was discovered from the entity types
     /// </summary>
     /// <param name="builder">The builder being used to construct the model for this context</param>
@@ -418,6 +423,19 @@ public abstract class BaseAuthDbContext : IdentityDbContext<ApplicationUser, App
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict); // Don't delete history if tenant is deleted (keep for audit)
+        });
+
+        // Configure RateLimitConfig
+        builder.Entity<RateLimitConfig>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.EndpointKey).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.PermittedRequests).IsRequired();
+            entity.Property(e => e.WindowSeconds).IsRequired();
+            entity.Property(e => e.IsEnabled).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+            entity.HasIndex(e => e.EndpointKey).IsUnique();
         });
 
         // Configure Identity tables naming
