@@ -22,6 +22,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="BoilerPlate.Diagnostics.WebApi.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\BoilerPlate.Diagnostics.AuditLogs.MongoDb\BoilerPlate.Diagnostics.AuditLogs.MongoDb.csproj" />
     <ProjectReference Include="..\BoilerPlate.Diagnostics.Database\BoilerPlate.Diagnostics.Database.csproj" />
     <ProjectReference Include="..\BoilerPlate.Diagnostics.EventLogs.MongoDb\BoilerPlate.Diagnostics.EventLogs.MongoDb.csproj" />

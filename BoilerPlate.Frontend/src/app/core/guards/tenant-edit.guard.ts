@@ -3,9 +3,11 @@ import { Router, CanActivateFn, ActivatedRouteSnapshot } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 /**
- * Allows access to tenant edit when:
- * - User is Service Administrator (any tenant), or
- * - User is Tenant Administrator and the route :id is their own tenant.
+ * Route guard for tenant edit routes. Allows access when the user is Service Administrator
+ * (any tenant) or Tenant Administrator editing their own tenant (route :id matches current tenant).
+ * @param {ActivatedRouteSnapshot} route - Route snapshot; uses param 'id' for tenant ID.
+ * @description Redirects unauthenticated to /login; Tenant Admin editing another tenant to /my-tenant/settings; others to /account.
+ * @returns {boolean} true if allowed; false after redirect.
  */
 export const tenantEditGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
   const authService = inject(AuthService);

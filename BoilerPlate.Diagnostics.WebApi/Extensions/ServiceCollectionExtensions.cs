@@ -122,13 +122,19 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     ///     Fetches the ML-DSA signing key from the auth service JWKS endpoint.
+    ///     Internal overload accepts optional HttpClient for unit testing.
     /// </summary>
-    private static SecurityKey? FetchMldsaKeyFromJwks(string jwksUrl)
+    /// <param name="jwksUrl">URL of the JWKS endpoint (e.g. https://auth.example.com/.well-known/jwks.json)</param>
+    /// <param name="httpClient">Optional HttpClient for testing; when null, creates a new client with 10s timeout</param>
+    /// <returns>MlDsaSecurityKey if a valid ML-DSA key is found, otherwise null</returns>
+    internal static SecurityKey? FetchMldsaKeyFromJwks(string jwksUrl, HttpClient? httpClient = null)
     {
+        var client = httpClient ?? new HttpClient();
+        var shouldDispose = httpClient == null;
+        if (shouldDispose)
+            client.Timeout = TimeSpan.FromSeconds(10);
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
             var json = client.GetStringAsync(jwksUrl).GetAwaiter().GetResult();
             using var doc = JsonDocument.Parse(json);
             var keys = doc.RootElement.GetProperty("keys");
@@ -144,6 +150,11 @@ public static class ServiceCollectionExtensions
             }
         }
         catch { /* ignore */ }
+        finally
+        {
+            if (shouldDispose)
+                client.Dispose();
+        }
         return null;
     }
 

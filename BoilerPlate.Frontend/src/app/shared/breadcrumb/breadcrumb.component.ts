@@ -5,6 +5,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { TenantService } from '../../core/services/tenant.service';
 
+/** Breadcrumb item for navigation display (label and optional URL). */
 export interface BreadcrumbItem {
   label: string;
   url: string | null;

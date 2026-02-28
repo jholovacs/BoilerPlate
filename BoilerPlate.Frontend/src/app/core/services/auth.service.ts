@@ -4,6 +4,7 @@ import { Observable, BehaviorSubject, tap, map } from 'rxjs';
 import { Router } from '@angular/router';
 import { AuthApiConfigService } from './auth-api-config.service';
 
+/** OAuth2 password grant request body for login. */
 export interface LoginRequest {
   grant_type: string;
   username: string;
@@ -31,6 +32,7 @@ export interface LoginResult {
   user: UserInfo;
 }
 
+/** Decoded user info from JWT (sub, unique_name, email, roles, tenant_id). */
 export interface UserInfo {
   id: string;
   username: string;
@@ -42,6 +44,11 @@ export interface UserInfo {
 /** Auth API URLs use the auth:// scheme; they are resolved to the real base URL via auth-api.config.json */
 const AUTH_OAUTH_TOKEN = 'auth://oauth/token';
 
+/**
+ * Authentication service for login, logout, token storage, and role-based access checks.
+ * Handles OAuth2 password grant, JWT decoding, and user info from localStorage.
+ * @description Used by guards and components to determine authentication state and permissions.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -56,6 +63,13 @@ export class AuthService {
   private currentUserSubject = new BehaviorSubject<UserInfo | null>(this.getStoredUser());
   public currentUser$ = this.currentUserSubject.asObservable();
 
+  /**
+   * Authenticates the user via OAuth2 password grant.
+   * @param {string} username - User login name
+   * @param {string} password - User password
+   * @param {string} [tenantId] - Optional tenant ID for multi-tenant login
+   * @returns {Observable<LoginResult>} Token response and decoded user info
+   */
   login(username: string, password: string, tenantId?: string): Observable<LoginResult> {
     const request: LoginRequest = {
       grant_type: 'password',
@@ -106,6 +120,7 @@ export class AuthService {
     );
   }
 
+  /** Clears token and user from storage and redirects to /login. */
   logout(): void {
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
@@ -113,14 +128,17 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
+  /** Returns the stored access token, or null if not logged in. */
   getToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
   }
 
+  /** Returns true if the user has a valid access token. */
   isAuthenticated(): boolean {
     return !!this.getToken();
   }
 
+  /** Returns true if the current user has the Service Administrator role. */
   isServiceAdministrator(): boolean {
     const user = this.currentUserSubject.value;
     return AuthService.userHasServiceAdministratorRole(user);
@@ -164,11 +182,13 @@ export class AuthService {
            AuthService.userHasTenantAdministratorRole(user);
   }
 
+  /** Returns the current user's ID (sub claim) or null. */
   getCurrentUserId(): string | null {
     const user = this.currentUserSubject.value;
     return user?.id ?? null;
   }
 
+  /** Returns the current user's tenant ID or null. */
   getCurrentTenantId(): string | null {
     const user = this.currentUserSubject.value;
     return user?.tenantId ?? null;

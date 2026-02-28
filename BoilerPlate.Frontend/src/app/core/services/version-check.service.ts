@@ -6,6 +6,7 @@ import { catchError } from 'rxjs/operators';
 const VERSION_URL = '/version.json';
 const STORAGE_KEY = 'app_build_time';
 
+/** Version payload from /version.json used for reload-on-deploy check. */
 export interface VersionPayload {
   appVersion?: string;
   buildId?: string;

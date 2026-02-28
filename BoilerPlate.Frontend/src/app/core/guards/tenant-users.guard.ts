@@ -3,9 +3,12 @@ import { Router, CanActivateFn, ActivatedRouteSnapshot } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 /**
- * Allows access to tenant-scoped user management when:
- * - User is authenticated and can manage users (Service, Tenant, or User Administrator), and
- * - User is Service Administrator (any tenant), or the route :id is their own tenant.
+ * Route guard for tenant-scoped user management routes.
+ * Allows access when user can manage users (Service, Tenant, or User Administrator)
+ * and either is Service Administrator or the route :id or :tenantId matches their tenant.
+ * @param {ActivatedRouteSnapshot} route - Route snapshot; uses param 'id' or 'tenantId' for tenant ID.
+ * @description Redirects unauthenticated to /login; users without user management to /account.
+ * @returns {boolean} true if allowed; false after redirect.
  */
 export const tenantUsersGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
   const authService = inject(AuthService);

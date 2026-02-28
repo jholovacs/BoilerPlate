@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthApiConfigService } from './auth-api-config.service';
 
+/** Metric data point from diagnostics OData Metrics. */
 export interface MetricPoint {
   id: number;
   timestamp: string;
@@ -14,12 +15,17 @@ export interface MetricPoint {
   source?: string;
 }
 
+/** OData response wrapper with value array and optional count. */
 export interface ODataResponse<T> {
   '@odata.context'?: string;
   '@odata.count'?: number;
   value: T[];
 }
 
+/**
+ * Service for querying OpenTelemetry metrics via OData.
+ * Uses diagnostics API base URL; Service Administrators see all, Tenant Administrators see their tenant only.
+ */
 @Injectable({
   providedIn: 'root'
 })

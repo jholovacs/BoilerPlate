@@ -5,6 +5,7 @@ import { AuthApiConfigService } from './auth-api-config.service';
 
 const AUTH_SCHEME = 'auth://';
 
+/** Response from refresh token revocation endpoints. */
 export interface RevokeRefreshTokensResponse {
   revokedCount: number;
   scope: string;

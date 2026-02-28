@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import { AuthService } from './auth.service';
 import { AuthApiConfigService } from './auth-api-config.service';
 
+/** Real-time event log payload from SignalR event-logs hub. */
 export interface EventLogRealtimePayload {
   id: string;
   timestamp: string;
@@ -16,6 +17,10 @@ export interface EventLogRealtimePayload {
   properties?: string;
 }
 
+/**
+ * Service for real-time event logs via SignalR hub.
+ * Connects to diagnostics API /hubs/event-logs with JWT; emits EventLog payloads.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -29,6 +34,7 @@ export class EventLogsSignalRService implements OnDestroy {
   /** Observable of real-time event logs. */
   readonly onEventLog = this.eventLog$.asObservable();
 
+  /** Establishes SignalR connection to event-logs hub; no-op if already connected. */
   connect(): void {
     if (this.connection?.state === 'Connected') return;
     const token = this.authService.getToken();
@@ -49,6 +55,7 @@ export class EventLogsSignalRService implements OnDestroy {
     this.connection.start().catch(err => console.warn('[EventLogsSignalR] Failed to connect:', err));
   }
 
+  /** Stops the SignalR connection. */
   disconnect(): void {
     this.connection?.stop().catch(() => {});
     this.connection = null;

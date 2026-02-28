@@ -3,8 +3,10 @@ import { Router, CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 /**
- * Allows access to diagnostics (event logs, audit logs) only when the user is
- * a Service Administrator or Tenant Administrator. No other roles have access.
+ * Route guard for diagnostics routes (event logs, audit logs, metrics).
+ * Allows access only when the user is Service Administrator or Tenant Administrator.
+ * @description Redirects unauthenticated users to /login; users without diagnostics access to /account.
+ * @returns {boolean} true if user can access diagnostics; false after redirect.
  */
 export const diagnosticsGuard: CanActivateFn = () => {
   const authService = inject(AuthService);

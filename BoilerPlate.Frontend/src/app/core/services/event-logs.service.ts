@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthApiConfigService } from './auth-api-config.service';
 
+/** Event log entry from diagnostics OData EventLogs. */
 export interface EventLogEntry {
   id: number;
   /** MongoDB ObjectId for realtime logs; used for deduplication */
@@ -19,12 +20,17 @@ export interface EventLogEntry {
   properties?: string;
 }
 
+/** OData response wrapper with value array and optional count. */
 export interface ODataResponse<T> {
   '@odata.context'?: string;
   '@odata.count'?: number;
   value: T[];
 }
 
+/**
+ * Service for querying event logs via OData.
+ * Uses diagnostics API base URL; Service Administrators see all, Tenant Administrators see their tenant only.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -59,6 +65,7 @@ export class EventLogsService {
     return this.http.get<ODataResponse<EventLogEntry>>(this.baseUrl, { params: httpParams });
   }
 
+  /** Fetches a single event log entry by ID. */
   getById(id: number): Observable<EventLogEntry> {
     return this.http.get<EventLogEntry>(`${this.baseUrl}(${id})`);
   }

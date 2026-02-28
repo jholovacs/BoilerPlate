@@ -2,7 +2,13 @@ import { inject } from '@angular/core';
 import { Router, CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-/** Allows access if the user is authenticated and has Service, Tenant, or User Administrator role. */
+/**
+ * Route guard for user management routes (e.g. /users list).
+ * Allows access when the user is authenticated and can manage users
+ * (Service, Tenant, or User Administrator).
+ * @description Redirects authenticated users without permission to /account; unauthenticated to /login.
+ * @returns {boolean} true if user can manage users; false after redirect.
+ */
 export const userManagementGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
   const router = inject(Router);

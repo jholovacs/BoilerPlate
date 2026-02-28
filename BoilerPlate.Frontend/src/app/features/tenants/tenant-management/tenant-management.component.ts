@@ -7,6 +7,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { RefreshTokensService } from '../../../core/services/refresh-tokens.service';
 import { Router } from '@angular/router';
 
+/** Tenant entity from /api/tenants. */
 export interface Tenant {
   id: string;
   name: string;

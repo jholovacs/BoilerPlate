@@ -6,6 +6,7 @@ const CONFIG_PATH = '/auth-api.config.json';
 /** Default when config is missing or fails to load and app is on localhost (e.g. ng serve on 4200). */
 const DEFAULT_DEV_AUTH_BASE = 'http://localhost:8080';
 
+/** Configuration from auth-api.config.json for auth and diagnostics API base URLs. */
 export interface AuthApiConfig {
   authApiBaseUrl: string;
   /** Base URL for diagnostics API (event logs, audit logs, metrics). Empty = use relative /diagnostics (nginx proxy). */
@@ -14,8 +15,8 @@ export interface AuthApiConfig {
 
 /**
  * Resolves auth:// URLs to the configured authentication API base URL.
- * Load auth-api.config.json and set authApiBaseUrl to your auth server (e.g. http://localhost:8080).
- * Use empty string for same-origin (e.g. when a reverse proxy serves the auth API under the same host).
+ * Loads auth-api.config.json via APP_INITIALIZER and provides base URLs for auth and diagnostics APIs.
+ * @description Use auth:// scheme for auth endpoints; empty authApiBaseUrl means same-origin.
  */
 @Injectable({
   providedIn: 'root'
@@ -25,8 +26,8 @@ export class AuthApiConfigService {
   private diagnosticsBaseUrl: string = '';
 
   /**
-   * Load config from auth-api.config.json. Called by APP_INITIALIZER before the app starts.
-   * If the file is missing or fails, and the app is on localhost, falls back to DEFAULT_DEV_AUTH_BASE.
+   * Loads config from auth-api.config.json. Called by APP_INITIALIZER before the app starts.
+   * @description Falls back to localhost:8080 when config is missing and app is on localhost.
    */
   async loadConfig(): Promise<void> {
     try {
@@ -64,9 +65,9 @@ export class AuthApiConfigService {
   }
 
   /**
-   * Resolve an auth:// URL to the full request URL.
-   * - auth://oauth/token -> {baseUrl}/oauth/token (or /oauth/token if baseUrl is empty)
-   * - Other URLs are returned unchanged.
+   * Resolves an auth:// URL to the full request URL.
+   * @param {string} url - URL with auth:// scheme (e.g. auth://oauth/token)
+   * @returns {string} Resolved URL (e.g. {baseUrl}/oauth/token or /oauth/token if same-origin)
    */
   resolveUrl(url: string): string {
     if (!url.startsWith(AUTH_SCHEME)) {

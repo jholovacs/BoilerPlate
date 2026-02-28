@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthApiConfigService } from './auth-api-config.service';
 
+/** Audit log entry from diagnostics OData AuditLogs. */
 export interface AuditLogEntry {
   id: string;
   eventType?: string;
@@ -18,12 +19,17 @@ export interface AuditLogEntry {
   metadata?: string;
 }
 
+/** OData response wrapper with value array and optional count. */
 export interface ODataResponse<T> {
   '@odata.context'?: string;
   '@odata.count'?: number;
   value: T[];
 }
 
+/**
+ * Service for querying audit logs via OData.
+ * Uses diagnostics API base URL; Service Administrators see all, Tenant Administrators see their tenant only.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -58,6 +64,7 @@ export class AuditLogsService {
     return this.http.get<ODataResponse<AuditLogEntry>>(this.baseUrl, { params: httpParams });
   }
 
+  /** Fetches a single audit log entry by ID. */
   getById(id: string): Observable<AuditLogEntry> {
     return this.http.get<AuditLogEntry>(`${this.baseUrl}('${encodeURIComponent(id)}')`);
   }
