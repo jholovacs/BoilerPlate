@@ -1,21 +1,27 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using BoilerPlate.Authentication.Database.Entities;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Strathweb.Dilithium.IdentityModel;
 
 namespace BoilerPlate.Authentication.WebApi.Services;
 
 /// <summary>
-///     Service for generating and validating JWT tokens using RS256 (RSA asymmetric encryption)
+///     Service for generating and validating JWT tokens using ML-DSA (post-quantum digital signatures).
+///     Replaces RSA/RS256 with ML-DSA-65 (NIST FIPS 204) for PQC resistance.
 /// </summary>
 public class JwtTokenService
 {
+    private const string KeyId = "auth-key-1";
+    private const string Algorithm = "ML-DSA-65";
+
     private readonly JwtSettings _jwtSettings;
-    private readonly RSA _rsa;
+    private readonly MlDsaSecurityKey _securityKey;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="JwtTokenService" /> class
@@ -23,39 +29,40 @@ public class JwtTokenService
     public JwtTokenService(IOptions<JwtSettings> jwtSettings)
     {
         _jwtSettings = jwtSettings.Value;
-        _rsa = RSA.Create();
 
-        // Load RSA keys from configuration
-        if (!string.IsNullOrEmpty(_jwtSettings.PrivateKey))
+        var mldsaJwk = ResolveMldsaJwk(_jwtSettings, jwtSettings);
+
+        if (!string.IsNullOrEmpty(mldsaJwk))
         {
-            // Note: .NET's ImportFromPem doesn't support encrypted PEM keys directly
-            // If you have an encrypted key, decrypt it first using OpenSSL:
-            // openssl rsa -in encrypted_key.pem -out decrypted_key.pem
-            // The PrivateKeyPassword setting is reserved for future use or custom decryption implementations
-            try
-            {
-                _rsa.ImportFromPem(_jwtSettings.PrivateKey);
-            }
-            catch (CryptographicException ex)
-            {
-                if (!string.IsNullOrEmpty(_jwtSettings.PrivateKeyPassword))
-                    throw new InvalidOperationException(
-                        "Failed to import private key. Password-protected PEM keys are not directly supported by ImportFromPem. " +
-                        "Please decrypt the key first using OpenSSL (openssl rsa -in encrypted_key.pem -out decrypted_key.pem) " +
-                        "or provide an unencrypted key. For security, use a secrets manager to store decrypted keys.",
-                        ex);
-                throw;
-            }
-        }
-        else if (!string.IsNullOrEmpty(_jwtSettings.PublicKey))
-        {
-            _rsa.ImportFromPem(_jwtSettings.PublicKey);
+            var jwkJson = DecodeJwkJson(mldsaJwk);
+            var jwk = new JsonWebKey(jwkJson);
+            _securityKey = new MlDsaSecurityKey(jwk);
         }
         else
         {
             // Generate new keys if not provided (for development)
-            var keySize = 2048; // RSA-2048 is quantum-resistant enough for most use cases
-            _rsa.KeySize = keySize;
+            _securityKey = new MlDsaSecurityKey(Algorithm);
+        }
+    }
+
+    private static string? ResolveMldsaJwk(JwtSettings jwtSettings, IOptions<JwtSettings> _)
+    {
+        return jwtSettings.MldsaJwk;
+    }
+
+    private static string DecodeJwkJson(string value)
+    {
+        if (value.Contains("{"))
+            return value; // Already JSON
+
+        try
+        {
+            var bytes = Convert.FromBase64String(value);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return value;
         }
     }
 
@@ -108,12 +115,7 @@ public class JwtTokenService
         var expiryUnixTimestamp = ((DateTimeOffset)expirationTime).ToUnixTimeSeconds();
         claims.Add(new Claim(JwtRegisteredClaimNames.Exp, expiryUnixTimestamp.ToString(), ClaimValueTypes.Integer64));
 
-        var key = new RsaSecurityKey(_rsa)
-        {
-            KeyId = "auth-key-1"
-        };
-
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256); // RS256
+        var credentials = new SigningCredentials(_securityKey, Algorithm);
 
         var token = new JwtSecurityToken(
             _jwtSettings.Issuer,
@@ -167,8 +169,7 @@ public class JwtTokenService
         claims.Add(new Claim(JwtRegisteredClaimNames.Exp,
             ((DateTimeOffset)expirationTime).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
 
-        var key = new RsaSecurityKey(_rsa) { KeyId = "auth-key-1" };
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+        var credentials = new SigningCredentials(_securityKey, Algorithm);
 
         var token = new JwtSecurityToken(issuer, audience, claims, expires: expirationTime,
             signingCredentials: credentials);
@@ -188,21 +189,11 @@ public class JwtTokenService
     }
 
     /// <summary>
-    ///     Gets the RSA public key for token validation
+    ///     Gets the public key as a JSON Web Key for JWKS / token validation
     /// </summary>
-    /// <returns>RSA parameters</returns>
-    public RSAParameters GetPublicKey()
+    public JsonWebKey GetPublicKeyJwk()
     {
-        return _rsa.ExportParameters(false);
-    }
-
-    /// <summary>
-    ///     Gets the RSA private key for token signing
-    /// </summary>
-    /// <returns>RSA parameters</returns>
-    public RSAParameters GetPrivateKey()
-    {
-        return _rsa.ExportParameters(true);
+        return _securityKey.ToJsonWebKey(includePrivateKey: false);
     }
 
     /// <summary>
@@ -224,10 +215,8 @@ public class JwtTokenService
 
             if (validateSignature)
             {
-                var key = new RsaSecurityKey(_rsa)
-                {
-                    KeyId = "auth-key-1"
-                };
+                var publicJwk = _securityKey.ToJsonWebKey(includePrivateKey: false);
+                var validationKey = new MlDsaSecurityKey(publicJwk);
 
                 var validationParameters = new TokenValidationParameters
                 {
@@ -237,7 +226,7 @@ public class JwtTokenService
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = _jwtSettings.Issuer,
                     ValidAudience = _jwtSettings.Audience,
-                    IssuerSigningKey = key,
+                    IssuerSigningKey = validationKey,
                     ClockSkew = TimeSpan.Zero
                 };
 
@@ -267,20 +256,22 @@ public class JwtTokenService
     }
 
     /// <summary>
-    ///     Exports the public key in PEM format
+    ///     Exports the public key as JWK JSON for JWKS endpoint
     /// </summary>
-    /// <returns>Public key PEM string</returns>
-    public string ExportPublicKeyPem()
+    /// <returns>Public key as JSON string</returns>
+    public string ExportPublicKeyJwk()
     {
-        return _rsa.ExportRSAPublicKeyPem();
+        var jwk = _securityKey.ToJsonWebKey(includePrivateKey: false);
+        return JsonSerializer.Serialize(jwk);
     }
 
     /// <summary>
-    ///     Exports the private key in PEM format
+    ///     Exports the full key pair as JWK JSON (for backup/configuration)
     /// </summary>
-    /// <returns>Private key PEM string</returns>
-    public string ExportPrivateKeyPem()
+    /// <returns>Full JWK as JSON string</returns>
+    public string ExportFullKeyJwk()
     {
-        return _rsa.ExportRSAPrivateKeyPem();
+        var jwk = _securityKey.ToJsonWebKey(includePrivateKey: true);
+        return JsonSerializer.Serialize(jwk);
     }
 }

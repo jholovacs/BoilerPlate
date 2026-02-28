@@ -39,14 +39,13 @@ public class TokenIntrospectionControllerTests
         _context = new TestAuthDbContext(options);
         _loggerMock = new Mock<ILogger<TokenIntrospectionController>>();
 
-        var (privateKey, publicKey) = RsaKeyGenerator.GenerateKeyPair();
+        var (fullJwk, _) = MlDsaKeyGenerator.GenerateKeyPair();
         _jwtSettings = new JwtSettings
         {
             Issuer = "test-issuer",
             Audience = "test-audience",
             ExpirationMinutes = 60,
-            PrivateKey = privateKey,
-            PublicKey = publicKey
+            MldsaJwk = fullJwk
         };
         _jwtTokenService = new JwtTokenService(Options.Create(_jwtSettings));
 
@@ -212,8 +211,7 @@ public class TokenIntrospectionControllerTests
             Issuer = _jwtSettings.Issuer,
             Audience = _jwtSettings.Audience,
             ExpirationMinutes = -60, // Negative to simulate expired
-            PrivateKey = _jwtSettings.PrivateKey,
-            PublicKey = _jwtSettings.PublicKey
+            MldsaJwk = _jwtSettings.MldsaJwk
         };
         var expiredTokenService = new JwtTokenService(Options.Create(expiredTokenSettings));
         var expiredToken = expiredTokenService.GenerateToken(user, Array.Empty<string>());

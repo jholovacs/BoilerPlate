@@ -58,23 +58,16 @@ public class WellKnownController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetJwks()
     {
-        var publicKeyParams = _jwtTokenService.GetPublicKey();
-        var jwks = new
+        var jwk = _jwtTokenService.GetPublicKeyJwk();
+        var keyObj = new Dictionary<string, object?>
         {
-            keys = new[]
-            {
-                new
-                {
-                    kty = "RSA",
-                    use = "sig",
-                    kid = "auth-key-1",
-                    alg = "RS256",
-                    n = Convert.ToBase64String(publicKeyParams.Modulus ?? Array.Empty<byte>()),
-                    e = Convert.ToBase64String(publicKeyParams.Exponent ?? Array.Empty<byte>())
-                }
-            }
+            ["kty"] = jwk.Kty,
+            ["kid"] = jwk.KeyId,
+            ["alg"] = jwk.Alg ?? "ML-DSA-65",
+            ["use"] = jwk.Use ?? "sig",
+            ["x"] = jwk.X
         };
-        return Ok(jwks);
+        return Ok(new { keys = new[] { keyObj } });
     }
 
     private string GetIssuerBaseUrl()

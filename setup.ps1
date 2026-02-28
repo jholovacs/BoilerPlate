@@ -22,15 +22,14 @@ Write-Host ""
 # Verify prerequisites
 Write-ColorOutput Yellow "Verifying prerequisites..."
 
-# Check OpenSSL
+# Check .NET (for ML-DSA key generation)
 try {
-    $opensslVersion = & openssl version 2>&1
+    $dotnetVersion = & dotnet --version 2>&1
     if ($LASTEXITCODE -ne 0) { throw }
-    Write-ColorOutput Green "  ✓ OpenSSL is installed: $opensslVersion"
+    Write-ColorOutput Green "  ✓ .NET is installed: $dotnetVersion"
 } catch {
-    Write-ColorOutput Red "  ✗ OpenSSL is not installed"
-    Write-ColorOutput Yellow "    Install from: https://slproweb.com/products/Win32OpenSSL.html"
-    Write-ColorOutput Yellow "    Or use: choco install openssl"
+    Write-ColorOutput Red "  ✗ .NET SDK is not installed"
+    Write-ColorOutput Yellow "    Install from: https://dotnet.microsoft.com/download"
     exit 1
 }
 
@@ -62,9 +61,9 @@ try {
 
 Write-Host ""
 
-# Setup JWT keys
+# Setup ML-DSA JWT keys
 if (-Not $SkipKeys) {
-    Write-ColorOutput Yellow "Setting up JWT keys..."
+    Write-ColorOutput Yellow "Setting up ML-DSA JWT keys..."
     
     # Create jwt-keys directory if it doesn't exist
     if (-Not (Test-Path "jwt-keys")) {
@@ -73,50 +72,24 @@ if (-Not $SkipKeys) {
     }
     
     # Check if keys exist and regenerate if requested
-    if ($RegenKeys -and (Test-Path "jwt-keys\private_key.pem")) {
+    if ($RegenKeys -and (Test-Path "jwt-keys\mldsa_jwk.json")) {
         Write-ColorOutput Yellow "  Regenerating keys (backing up existing)..."
-        if (Test-Path "jwt-keys\private_key.pem") {
-            Move-Item "jwt-keys\private_key.pem" "jwt-keys\private_key.pem.bak" -Force
-        }
-        if (Test-Path "jwt-keys\public_key.pem") {
-            Move-Item "jwt-keys\public_key.pem" "jwt-keys\public_key.pem.bak" -Force
-        }
+        if (Test-Path "jwt-keys\mldsa_jwk.json") { Move-Item "jwt-keys\mldsa_jwk.json" "jwt-keys\mldsa_jwk.json.bak" -Force }
+        if (Test-Path "jwt-keys\mldsa_jwk_base64.txt") { Move-Item "jwt-keys\mldsa_jwk_base64.txt" "jwt-keys\mldsa_jwk_base64.txt.bak" -Force }
     }
     
-    # Generate private key if it doesn't exist
-    if (-Not (Test-Path "jwt-keys\private_key.pem")) {
-        Write-ColorOutput Yellow "  Generating private key..."
-        & openssl genrsa -out "jwt-keys\private_key.pem" 2048
+    # Generate ML-DSA keys if they don't exist
+    if (-Not (Test-Path "jwt-keys\mldsa_jwk.json")) {
+        Write-ColorOutput Yellow "  Generating ML-DSA key pair..."
+        $jwtKeysPath = (Get-Item "jwt-keys").FullName
+        & dotnet run --project BoilerPlate.Authentication.WebApi/BoilerPlate.Authentication.WebApi.csproj -- --generate-mldsa-keys $jwtKeysPath
         if ($LASTEXITCODE -ne 0) {
-            Write-ColorOutput Red "  ✗ Failed to generate private key"
+            Write-ColorOutput Red "  ✗ Failed to generate ML-DSA keys"
             exit 1
         }
-        Write-ColorOutput Green "  ✓ Private key generated"
+        Write-ColorOutput Green "  ✓ ML-DSA keys generated"
     } else {
-        Write-ColorOutput Green "  ✓ Private key already exists"
-    }
-    
-    # Generate public key if it doesn't exist
-    if (-Not (Test-Path "jwt-keys\public_key.pem")) {
-        Write-ColorOutput Yellow "  Generating public key..."
-        & openssl rsa -in "jwt-keys\private_key.pem" -pubout -out "jwt-keys\public_key.pem"
-        if ($LASTEXITCODE -ne 0) {
-            Write-ColorOutput Red "  ✗ Failed to generate public key"
-            exit 1
-        }
-        Write-ColorOutput Green "  ✓ Public key generated"
-    } else {
-        Write-ColorOutput Green "  ✓ Public key already exists"
-    }
-    
-    # Verify keys
-    Write-ColorOutput Yellow "  Verifying keys..."
-    & openssl rsa -in "jwt-keys\private_key.pem" -check -noout | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-ColorOutput Green "  ✓ Private key is valid"
-    } else {
-        Write-ColorOutput Red "  ✗ Private key is invalid"
-        exit 1
+        Write-ColorOutput Green "  ✓ ML-DSA keys already exist"
     }
 }
 
@@ -126,23 +99,17 @@ Write-Host ""
 Write-ColorOutput Yellow "Creating .env file..."
 
 try {
-    if (-Not (Test-Path "jwt-keys\private_key.pem") -or -Not (Test-Path "jwt-keys\public_key.pem")) {
-        Write-ColorOutput Red "  ✗ JWT keys not found"
-        Write-ColorOutput Yellow "    Run with -SkipKeys:$false to generate keys first"
+    if (-Not (Test-Path "jwt-keys\mldsa_jwk_base64.txt")) {
+        Write-ColorOutput Red "  ✗ ML-DSA JWT key not found"
+        Write-ColorOutput Yellow "    Run with -SkipKeys:`$false to generate keys first"
         exit 1
     }
     
-    # Read and encode keys as base64
-    $privateKeyContent = Get-Content "jwt-keys\private_key.pem" -Raw
-    $publicKeyContent = Get-Content "jwt-keys\public_key.pem" -Raw
-    
-    $privateKeyBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($privateKeyContent))
-    $publicKeyBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($publicKeyContent))
+    $mldsaJwkBase64 = (Get-Content "jwt-keys\mldsa_jwk_base64.txt" -Raw).Trim()
     
     # Create .env file content with all configuration
     $envContent = @"
-JWT_PRIVATE_KEY=$privateKeyBase64
-JWT_PUBLIC_KEY=$publicKeyBase64
+JWT_MLDSA_JWK=$mldsaJwkBase64
 JWT_EXPIRATION_MINUTES=60
 
 # Database Connection Strings

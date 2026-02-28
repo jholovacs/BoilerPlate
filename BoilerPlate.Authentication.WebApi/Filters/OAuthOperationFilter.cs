@@ -4,7 +4,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 namespace BoilerPlate.Authentication.WebApi.Filters;
 
 /// <summary>
-///     Swagger operation filter to add comprehensive, well-formatted documentation for OAuth endpoints
+///     Swagger operation filter to add comprehensive, well-formatted documentation for OAuth endpoints and JWT validation.
 /// </summary>
 public class OAuthOperationFilter : IOperationFilter
 {
@@ -68,7 +68,7 @@ Authorization: Bearer {access_token}
 ```
 
 **Token Validation:**
-The JWT is signed using RS256. Use the public key from `/.well-known/jwks.json` to validate the token signature.
+The JWT is signed using ML-DSA-65 (post-quantum). Use the public key from `/.well-known/jwks.json` to validate the token signature. If your runtime does not support ML-DSA, use `POST /jwt/validate` for server-side validation.
 
 **References:**
 - [RFC 6749 Section 4.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.3) - Resource Owner Password Credentials Grant
@@ -189,12 +189,11 @@ Location: https://myapp.com/callback?error=access_denied&error_description=User%
 {
   ""keys"": [
     {
-      ""kty"": ""RSA"",
+      ""kty"": ""AKP"",
       ""use"": ""sig"",
       ""kid"": ""auth-key-1"",
-      ""alg"": ""RS256"",
-      ""n"": ""0vx7agoebGcQSuuPiLJXZptN9..."",
-      ""e"": ""AQAB""
+      ""alg"": ""ML-DSA-65"",
+      ""x"": ""base64url-encoded-public-key...""
     }
   ]
 }
@@ -204,7 +203,7 @@ Location: https://myapp.com/callback?error=access_denied&error_description=User%
 1. Retrieve the JWKS from this endpoint (cache for performance)
 2. Extract the ""kid"" (Key ID) from the JWT header
 3. Find the matching key in the JWKS using the ""kid""
-4. Use the public key (n, e) to verify the JWT signature
+4. Use the public key (x) to verify the JWT signature
 5. Validate JWT claims (exp, iss, aud, etc.)
 
 **Security Considerations:**
@@ -215,7 +214,7 @@ Location: https://myapp.com/callback?error=access_denied&error_description=User%
 
 **Integration Examples:**
 - **.NET:** Use `Microsoft.IdentityModel.Protocols.OpenIdConnect` with JwksUri
-- **Node.js:** Use `jwks-rsa` library or `jsonwebtoken` with JWKS
+- **Node.js:** Use `jose` or `jsonwebtoken` with JWKS (ML-DSA support may require PQC libraries)
 - **Python:** Use `PyJWT` with `cryptography` library and JWKS
 - **Go:** Use `github.com/lestrrat-go/jwx` for JWKS support
 
@@ -286,6 +285,72 @@ token=eyJhbGciOiJSUzI1NiIs...&token_type_hint=access_token
 **References:**
 - [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662) - OAuth 2.0 Token Introspection
 - [RFC 7519 Section 10.1](https://datatracker.ietf.org/doc/html/rfc7519#section-10.1) - JWT Validation";
+        }
+
+        // POST /jwt/validate
+        else if (path.Contains("/jwt/validate") && methodName == "Validate")
+        {
+            operation.Summary = "JWT Validation (Anonymous)";
+            operation.Description = @"Validates a JWT access token without requiring authentication. Use this endpoint when your application cannot validate ML-DSA-signed tokens locally (e.g. legacy runtimes, unsupported libraries).
+
+**Purpose:**
+This endpoint allows applications to validate JWT tokens when their runtime or library does not support the ML-DSA (post-quantum) signing algorithm used by this authentication server. Instead of validating the signature locally, the application sends the token to this API for server-side validation.
+
+**When to use:**
+- Your language/runtime has no ML-DSA or Dilithium support (e.g. older Node.js, Python, Go versions)
+- Your JWT library does not support the AKP key type or ML-DSA-65 algorithm
+- You are integrating with third-party software that cannot validate ML-DSA tokens
+
+**What is validated:**
+- Signature (ML-DSA-65)
+- Issuer and audience
+- Expiration (exp claim)
+
+**Response:**
+- `valid: true` — Token is valid and not expired
+- `valid: false, expired: true` — Signature was valid but token has expired
+- `valid: false, expired: false` — Token is invalid (bad signature, wrong issuer/audience, or malformed)
+
+**Security:**
+- No authentication required (public endpoint)
+- No claims or user data are returned to protect privacy
+- Consider rate limiting this endpoint in production to prevent abuse
+- Tokens are not logged or stored
+
+**Request Example:**
+```json
+{
+  ""token"": ""eyJhbGciOiJNTC1EU0EtNjUiLCJraWQiOiJhdXRoLWtleS0xIiwidHlwIjoiSldUIn0...""
+}
+```
+
+**Response Example (Valid):**
+```json
+{
+  ""valid"": true,
+  ""expired"": false
+}
+```
+
+**Response Example (Expired):**
+```json
+{
+  ""valid"": false,
+  ""expired"": true
+}
+```
+
+**Response Example (Invalid):**
+```json
+{
+  ""valid"": false,
+  ""expired"": false
+}
+```
+
+**References:**
+- [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519) - JSON Web Token (JWT)
+- [NIST FIPS 204](https://csrc.nist.gov/pubs/fips/204/final) - ML-DSA (Module-Lattice-Based Digital Signature Standard)";
         }
     }
 }

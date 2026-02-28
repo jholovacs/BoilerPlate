@@ -224,22 +224,15 @@ verify-prerequisites: ## Verify required tools are installed (used by make setup
 	fi
 	@echo "$(GREEN)$(OK) All prerequisites are installed$(NC)"
 
-setup-keys: ## Generate JWT keys if they don't exist
-	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Setting up JWT keys...$(NC)"
+setup-keys: ## Generate ML-DSA JWT keys (post-quantum) if they don't exist
+	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Setting up ML-DSA JWT keys...$(NC)"
 	@cd "$(PROJECT_ROOT)" && mkdir -p jwt-keys
-	@cd "$(PROJECT_ROOT)" && if [ ! -f jwt-keys/private_key.pem ]; then \
-		echo "$(YELLOW)  Generating private key...$(NC)"; \
-		openssl genrsa -out jwt-keys/private_key.pem 2048; \
-		echo "$(GREEN)  $(OK) Private key generated$(NC)"; \
+	@cd "$(PROJECT_ROOT)" && if [ ! -f jwt-keys/mldsa_jwk.json ]; then \
+		echo "$(YELLOW)  Generating ML-DSA key pair...$(NC)"; \
+		dotnet run --project BoilerPlate.Authentication.WebApi/BoilerPlate.Authentication.WebApi.csproj -- --generate-mldsa-keys "$$(pwd)/jwt-keys"; \
+		echo "$(GREEN)  $(OK) ML-DSA keys generated$(NC)"; \
 	else \
-		echo "$(GREEN)  $(OK) Private key already exists$(NC)"; \
-	fi
-	@cd "$(PROJECT_ROOT)" && if [ ! -f jwt-keys/public_key.pem ]; then \
-		echo "$(YELLOW)  Generating public key...$(NC)"; \
-		openssl rsa -in jwt-keys/private_key.pem -pubout -out jwt-keys/public_key.pem; \
-		echo "$(GREEN)  $(OK) Public key generated$(NC)"; \
-	else \
-		echo "$(GREEN)  $(OK) Public key already exists$(NC)"; \
+		echo "$(GREEN)  $(OK) ML-DSA keys already exist$(NC)"; \
 	fi
 
 setup-tls-certs: ## Generate self-signed TLS cert for development (HTTPS for OAuth2/RabbitMQ)
@@ -376,33 +369,15 @@ setup-volumes: ## Create or reset Docker volumes for PostgreSQL, MongoDB, Rabbit
 	done
 	@echo "$(GREEN)$(OK) Volume setup complete$(NC)"
 
-setup-env: setup-keys ## Create .env file with base64-encoded JWT keys
+setup-env: setup-keys ## Create .env file with base64-encoded ML-DSA JWT key
 	@echo "$(YELLOW)Creating .env file...$(NC)"
-	@if [ ! -f jwt-keys/private_key.pem ] || [ ! -f jwt-keys/public_key.pem ]; then \
-		echo "$(RED)  $(FAIL) JWT keys not found. Run 'make setup-keys' first.$(NC)"; \
+	@if [ ! -f jwt-keys/mldsa_jwk_base64.txt ]; then \
+		echo "$(RED)  $(FAIL) ML-DSA JWT key not found. Run 'make setup-keys' first.$(NC)"; \
 		exit 1; \
 	fi
-	@echo "$(YELLOW)  Encoding keys as base64...$(NC)"
-	@if command -v base64 > /dev/null 2>&1; then \
-		cat jwt-keys/private_key.pem | base64 | tr -d '\n' | tr -d '\r' > jwt-keys/private_key_base64.txt && \
-		cat jwt-keys/public_key.pem | base64 | tr -d '\n' | tr -d '\r' > jwt-keys/public_key_base64.txt; \
-	elif command -v openssl > /dev/null 2>&1; then \
-		openssl base64 -in jwt-keys/private_key.pem -A | tr -d '\n' | tr -d '\r' > jwt-keys/private_key_base64.txt && \
-		openssl base64 -in jwt-keys/public_key.pem -A | tr -d '\n' | tr -d '\r' > jwt-keys/public_key_base64.txt; \
-	else \
-		echo "$(RED)  $(FAIL) Neither base64 nor openssl found for encoding$(NC)"; \
-		echo "$(YELLOW)  Trying PowerShell on Windows...$(NC)"; \
-		if command -v powershell.exe > /dev/null 2>&1 && [ -f setup-env.ps1 ]; then \
-			powershell.exe -ExecutionPolicy Bypass -File setup-env.ps1; \
-		else \
-			echo "$(RED)  $(FAIL) No suitable encoding tool found$(NC)"; \
-			echo "$(YELLOW)  Please install OpenSSL or run setup.ps1 manually on Windows$(NC)"; \
-			exit 1; \
-		fi; \
-	fi
-	@if [ -f jwt-keys/private_key_base64.txt ] && [ -f jwt-keys/public_key_base64.txt ]; then \
-		echo "JWT_PRIVATE_KEY=$$(cat jwt-keys/private_key_base64.txt | tr -d '\r')" > .env; \
-		echo "JWT_PUBLIC_KEY=$$(cat jwt-keys/public_key_base64.txt | tr -d '\r')" >> .env; \
+	@echo "$(YELLOW)  Using ML-DSA key...$(NC)"
+	@if [ -f jwt-keys/mldsa_jwk_base64.txt ]; then \
+		echo "JWT_MLDSA_JWK=$$(cat jwt-keys/mldsa_jwk_base64.txt | tr -d '\r')" > .env; \
 		echo "JWT_EXPIRATION_MINUTES=60" >> .env; \
 		echo "" >> .env; \
 		echo "# JWT Issuer URL for microservices that validate tokens (e.g. Diagnostics)." >> .env; \
@@ -1174,11 +1149,10 @@ verify: ## Verify the setup
 	@echo "$(YELLOW)Verifying setup...$(NC)"
 	@echo ""
 	@echo "$(YELLOW)1. Checking JWT keys:$(NC)"
-	@if [ -f jwt-keys/private_key.pem ] && [ -f jwt-keys/public_key.pem ]; then \
-		echo "$(GREEN)  $(OK) JWT keys exist$(NC)"; \
-		openssl rsa -in jwt-keys/private_key.pem -check -noout > /dev/null 2>&1 && echo "$(GREEN)  $(OK) Private key is valid$(NC)" || echo "$(RED)  $(FAIL) Private key is invalid$(NC)"; \
+	@if [ -f jwt-keys/mldsa_jwk.json ]; then \
+		echo "$(GREEN)  $(OK) ML-DSA JWT keys exist$(NC)"; \
 	else \
-		echo "$(RED)  $(FAIL) JWT keys are missing$(NC)"; \
+		echo "$(RED)  $(FAIL) ML-DSA JWT keys are missing$(NC)"; \
 	fi
 	@echo ""
 	@echo "$(YELLOW)2. Checking .env file:$(NC)"
@@ -1205,7 +1179,7 @@ clean: ## Remove generated files (keeps JWT keys)
 	@rm -f jwt-keys/*_base64.txt
 	@rm -f jwt-keys/*_single_line.txt
 	@echo "$(GREEN)$(OK) Cleaned generated files$(NC)"
-	@echo "$(YELLOW)Note: JWT key files (.pem) were preserved$(NC)"
+	@echo "$(YELLOW)Note: ML-DSA JWT key files were preserved$(NC)"
 
 clean-all: ## Remove all generated files including JWT keys ($(WARN)️ WARNING)
 	@echo "$(RED)$(WARN)️  WARNING: This will delete all JWT keys!$(NC)"
@@ -1222,12 +1196,11 @@ clean-all: ## Remove all generated files including JWT keys ($(WARN)️ WARNING)
 regen-keys: ## Regenerate JWT keys (keeps existing as backup)
 	@echo "$(YELLOW)Regenerating JWT keys...$(NC)"
 	@mkdir -p jwt-keys
-	@if [ -f jwt-keys/private_key.pem ]; then \
-		mv jwt-keys/private_key.pem jwt-keys/private_key.pem.bak; \
-		mv jwt-keys/public_key.pem jwt-keys/public_key.pem.bak; \
+	@if [ -f jwt-keys/mldsa_jwk.json ]; then \
+		mv jwt-keys/mldsa_jwk.json jwt-keys/mldsa_jwk.json.bak; \
+		mv jwt-keys/mldsa_jwk_base64.txt jwt-keys/mldsa_jwk_base64.txt.bak; \
 		echo "$(YELLOW)  Backed up existing keys$(NC)"; \
 	fi
-	@openssl genrsa -out jwt-keys/private_key.pem 2048
-	@openssl rsa -in jwt-keys/private_key.pem -pubout -out jwt-keys/public_key.pem
-	@echo "$(GREEN)  $(OK) New keys generated$(NC)"
+	@cd "$(PROJECT_ROOT)" && dotnet run --project BoilerPlate.Authentication.WebApi/BoilerPlate.Authentication.WebApi.csproj -- --generate-mldsa-keys "$$(pwd)/jwt-keys"
+	@echo "$(GREEN)  $(OK) New ML-DSA keys generated$(NC)"
 	@echo "$(YELLOW)  Run 'make setup-env' to update .env file$(NC)"

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using BoilerPlate.Authentication.Database.PostgreSql.Extensions;
+using BoilerPlate.Authentication.WebApi.Utilities;
 using BoilerPlate.Authentication.WebApi.Configuration;
 using BoilerPlate.Authentication.WebApi.Extensions;
 using BoilerPlate.Authentication.WebApi.Filters;
@@ -18,6 +19,16 @@ using Serilog.Events;
 using Serilog.Templates;
 using Serilog.Sinks.RabbitMQ;
 using Swashbuckle.AspNetCore.SwaggerUI;
+
+// Generate ML-DSA keys if requested (e.g. make setup-keys)
+var genKeysIdx = Array.IndexOf(args, "--generate-mldsa-keys");
+if (genKeysIdx >= 0)
+{
+    var outputDir = genKeysIdx + 1 < args.Length ? args[genKeysIdx + 1] : null;
+    var path = MlDsaKeyGenerator.GenerateAndWriteToDirectory(outputDir);
+    Console.WriteLine($"Generated ML-DSA keys: {path}");
+    Environment.Exit(0);
+}
 
 // Configure Serilog before creating the builder
 // Check if we're running in design-time mode (EF Core migrations)

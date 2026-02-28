@@ -1,14 +1,17 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using BoilerPlate.Diagnostics.WebApi.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Strathweb.Dilithium.IdentityModel;
 
 namespace BoilerPlate.Diagnostics.WebApi.Extensions;
 
 /// <summary>
 ///     DI extensions for JWT validation and authorization (tokens from Authentication WebApi).
-///     Supports JWT_PUBLIC_KEY (env), JWT_ISSUER_URL (fetch from JWKS), or JWT_JWKS_URL (direct JWKS fetch).
+///     Supports JWT_MLDSA_JWK (env), JWT_ISSUER_URL (fetch from JWKS), or JWT_JWKS_URL (direct JWKS fetch).
+///     Uses ML-DSA (post-quantum) for token validation.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -35,27 +38,14 @@ public static class ServiceCollectionExtensions
 
         SecurityKey? signingKey = null;
 
-        // 1. Try JWT_PUBLIC_KEY (explicit PEM or base64)
+        // 1. Try JWT_MLDSA_JWK or JWT_PUBLIC_KEY (ML-DSA JWK, base64 or JSON)
+        var envMldsaJwk = configuration["JWT_MLDSA_JWK"] ?? Environment.GetEnvironmentVariable("JWT_MLDSA_JWK");
         var envPublicKey = configuration["JWT_PUBLIC_KEY"] ?? Environment.GetEnvironmentVariable("JWT_PUBLIC_KEY");
-        if (!string.IsNullOrWhiteSpace(envPublicKey))
+        var jwkInput = !string.IsNullOrWhiteSpace(envMldsaJwk) ? envMldsaJwk : envPublicKey;
+
+        if (!string.IsNullOrWhiteSpace(jwkInput))
         {
-            if (!envPublicKey.Contains("-----BEGIN"))
-            {
-                try
-                {
-                    var keyBytes = Convert.FromBase64String(envPublicKey);
-                    envPublicKey = Encoding.UTF8.GetString(keyBytes);
-                }
-                catch (FormatException) { /* treat as PEM */ }
-            }
-            envPublicKey = envPublicKey.Replace("\\n", "\n").Replace("\r\n", "\n").Replace("\r", "\n");
-            try
-            {
-                var rsa = RSA.Create();
-                rsa.ImportFromPem(envPublicKey);
-                signingKey = new RsaSecurityKey(rsa) { KeyId = "auth-key-1" };
-            }
-            catch { /* fall through to JWKS */ }
+            signingKey = TryParseMldsaJwk(jwkInput);
         }
 
         // 2. Try JWKS fetch (JWT_ISSUER_URL or JWT_JWKS_URL)
@@ -69,7 +59,7 @@ public static class ServiceCollectionExtensions
                     jwksUrl = $"{issuerUrl.TrimEnd('/')}/.well-known/jwks.json";
             }
             if (!string.IsNullOrWhiteSpace(jwksUrl))
-                signingKey = FetchKeyFromJwks(jwksUrl);
+                signingKey = FetchMldsaKeyFromJwks(jwksUrl);
         }
 
         if (signingKey == null)
@@ -116,15 +106,55 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    private static SecurityKey? TryParseMldsaJwk(string input)
+    {
+        try
+        {
+            var json = input.Contains("{") ? input : Encoding.UTF8.GetString(Convert.FromBase64String(input));
+            json = json.Replace("\\n", "\n").Replace("\r\n", "\n").Replace("\r", "\n");
+            var jwk = new JsonWebKey(json);
+            if (jwk.Kty == "AKP" || (jwk.Alg ?? "").StartsWith("ML-DSA"))
+                return new MlDsaSecurityKey(jwk);
+        }
+        catch { /* ignore */ }
+        return null;
+    }
+
     /// <summary>
-    ///     Adds JWT Bearer auth with a random key when JWT is not configured.
+    ///     Fetches the ML-DSA signing key from the auth service JWKS endpoint.
+    /// </summary>
+    private static SecurityKey? FetchMldsaKeyFromJwks(string jwksUrl)
+    {
+        try
+        {
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var json = client.GetStringAsync(jwksUrl).GetAwaiter().GetResult();
+            using var doc = JsonDocument.Parse(json);
+            var keys = doc.RootElement.GetProperty("keys");
+            foreach (var keyEl in keys.EnumerateArray())
+            {
+                var kty = keyEl.TryGetProperty("kty", out var k) ? k.GetString() : null;
+                if (kty == "AKP" || (keyEl.TryGetProperty("alg", out var a) && (a.GetString() ?? "").StartsWith("ML-DSA")))
+                {
+                    var jwkJson = keyEl.GetRawText();
+                    var jwk = new JsonWebKey(jwkJson);
+                    return new MlDsaSecurityKey(jwk);
+                }
+            }
+        }
+        catch { /* ignore */ }
+        return null;
+    }
+
+    /// <summary>
+    ///     Adds JWT Bearer auth with a placeholder key when JWT is not configured.
     ///     Ensures DefaultChallengeScheme exists so [Authorize] doesn't throw; all requests get 401.
     /// </summary>
     private static void AddAuthenticationWithRejectAllScheme(IServiceCollection services)
     {
-        using var rsa = RSA.Create();
-        rsa.ImportRSAPublicKey(rsa.ExportRSAPublicKey(), out _);
-        var key = new RsaSecurityKey(rsa) { KeyId = "placeholder" };
+        // Use a minimal ML-DSA key as placeholder (validation will fail for any real token)
+        var key = new MlDsaSecurityKey("ML-DSA-65");
 
         services.AddAuthentication(options =>
         {
@@ -141,25 +171,5 @@ public static class ServiceCollectionExtensions
                 ValidateLifetime = false
             };
         });
-    }
-
-    /// <summary>
-    ///     Fetches the signing key from the auth service JWKS endpoint.
-    ///     Used when JWT_PUBLIC_KEY is not set but JWT_ISSUER_URL or JWT_JWKS_URL is configured.
-    /// </summary>
-    private static SecurityKey? FetchKeyFromJwks(string jwksUrl)
-    {
-        try
-        {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var json = client.GetStringAsync(jwksUrl).GetAwaiter().GetResult();
-            var jwks = new JsonWebKeySet(json);
-            return jwks.GetSigningKeys().FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
     }
 }

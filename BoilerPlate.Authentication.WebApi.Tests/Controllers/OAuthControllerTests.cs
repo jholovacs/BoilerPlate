@@ -45,14 +45,13 @@ public class OAuthControllerTests
         _authenticationServiceMock = new Mock<IAuthenticationService>();
         _userServiceMock = new Mock<IUserService>();
         _userManagerMock = CreateUserManagerMock();
-        var (privateKey, publicKey) = RsaKeyGenerator.GenerateKeyPair();
+        var (fullJwk, _) = MlDsaKeyGenerator.GenerateKeyPair();
         var jwtSettings = new JwtSettings
         {
             Issuer = "test-issuer",
             Audience = "test-audience",
             ExpirationMinutes = 60,
-            PrivateKey = privateKey,
-            PublicKey = publicKey
+            MldsaJwk = fullJwk
         };
         _jwtTokenService = new JwtTokenService(Options.Create(jwtSettings));
         _jwtSettings = new JwtSettings
@@ -144,25 +143,25 @@ public class OAuthControllerTests
     #region JWKS Endpoint Tests
 
     /// <summary>
-    ///     Test case: GetJwks endpoint should return a valid JSON Web Key Set (JWKS) response.
-    ///     Scenario: A request is made to the /.well-known/jwks.json endpoint. The controller should return an OkObjectResult
-    ///     containing a JWKS structure with the public key information (key type, usage, key ID, algorithm, modulus, and
-    ///     exponent) in the standard JWKS format, enabling clients to validate JWT tokens.
+    ///     System under test: OAuthController.GetJwks.
+    ///     Test case: GetJwks is invoked to retrieve the JWKS for token validation.
+    ///     Expected result: Returns OkObjectResult with keys array; first key has kty "AKP" and alg "ML-DSA-65".
     /// </summary>
     [Fact]
-    public void GetJwks_ShouldReturnJwksResponse()
+    public void GetJwks_ShouldReturnMlDsaJwksResponse()
     {
-        // Act - Using real JwtTokenService instance
         var result = _controller.GetJwks();
 
-        // Assert
         result.Should().BeOfType<OkObjectResult>();
-        var okResult = result as OkObjectResult;
+        var okResult = (OkObjectResult)result;
         okResult!.Value.Should().NotBeNull();
 
-        // Verify JWKS structure
-        var jwks = okResult.Value;
-        jwks.Should().NotBeNull();
+        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
+        var doc = System.Text.Json.JsonDocument.Parse(json);
+        var keys = doc.RootElement.GetProperty("keys");
+        keys.GetArrayLength().Should().BeGreaterThan(0);
+        keys[0].GetProperty("kty").GetString().Should().Be("AKP");
+        keys[0].GetProperty("alg").GetString().Should().Be("ML-DSA-65");
     }
 
     #endregion

@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+every method, property, class, function, constant, etc. should be documented with what it is and its intended use. All unit tests will be xml documented with the test case and the expected results.

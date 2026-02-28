@@ -19,14 +19,13 @@ public class JwtTokenServiceTests
 
     public JwtTokenServiceTests()
     {
-        var (privateKey, publicKey) = RsaKeyGenerator.GenerateKeyPair();
+        var (fullJwk, _) = MlDsaKeyGenerator.GenerateKeyPair();
         _jwtSettings = new JwtSettings
         {
             Issuer = "test-issuer",
             Audience = "test-audience",
             ExpirationMinutes = 60,
-            PrivateKey = privateKey,
-            PublicKey = publicKey
+            MldsaJwk = fullJwk
         };
 
         var options = Options.Create(_jwtSettings);
@@ -487,84 +486,49 @@ public class JwtTokenServiceTests
     #region Key Export Tests
 
     /// <summary>
-    ///     Test case: GetPublicKey should return valid RSA parameters containing only public key components (modulus and
-    ///     exponent).
-    ///     Scenario: GetPublicKey is called on a JwtTokenService instance initialized with RSA keys. The returned
-    ///     RSAParameters should contain valid Modulus and Exponent values, but should not contain private key components (D,
-    ///     P, Q, DP, DQ, InverseQ), ensuring that only public key information is exposed for token validation purposes.
+    ///     System under test: JwtTokenService.GetPublicKeyJwk.
+    ///     Test case: GetPublicKeyJwk is called on a service initialized with an ML-DSA key.
+    ///     Expected result: Returns JsonWebKey with Kty "AKP", non-empty X (public key), and null D (no private key).
     /// </summary>
     [Fact]
-    public void GetPublicKey_ShouldReturnValidRsaParameters()
+    public void GetPublicKeyJwk_ShouldReturnValidJwk()
     {
-        // Act
-        var publicKey = _jwtTokenService.GetPublicKey();
+        var jwk = _jwtTokenService.GetPublicKeyJwk();
 
-        // Assert
-        publicKey.Modulus.Should().NotBeNull();
-        publicKey.Exponent.Should().NotBeNull();
-        publicKey.D.Should().BeNull(); // Public key shouldn't have private exponent
-        publicKey.P.Should().BeNull();
-        publicKey.Q.Should().BeNull();
-        publicKey.DP.Should().BeNull();
-        publicKey.DQ.Should().BeNull();
-        publicKey.InverseQ.Should().BeNull();
+        jwk.Should().NotBeNull();
+        jwk.Kty.Should().Be("AKP");
+        jwk.X.Should().NotBeNullOrEmpty();
+        jwk.D.Should().BeNull(); // Public key shouldn't have private component
     }
 
     /// <summary>
-    ///     Test case: GetPrivateKey should return valid RSA parameters containing both public and private key components.
-    ///     Scenario: GetPrivateKey is called on a JwtTokenService instance initialized with RSA keys. The returned
-    ///     RSAParameters should contain valid Modulus, Exponent, and private key components (D, P, Q), confirming that the
-    ///     full key pair is accessible for token signing operations.
+    ///     System under test: JwtTokenService.ExportPublicKeyJwk.
+    ///     Test case: ExportPublicKeyJwk is called to serialize the public key for JWKS.
+    ///     Expected result: Returns non-empty JSON string containing "kty" and "AKP".
     /// </summary>
     [Fact]
-    public void GetPrivateKey_ShouldReturnValidRsaParameters()
+    public void ExportPublicKeyJwk_ShouldReturnValidJson()
     {
-        // Act
-        var privateKey = _jwtTokenService.GetPrivateKey();
+        var jwkJson = _jwtTokenService.ExportPublicKeyJwk();
 
-        // Assert
-        privateKey.Modulus.Should().NotBeNull();
-        privateKey.Exponent.Should().NotBeNull();
-        privateKey.D.Should().NotBeNull(); // Private key should have private exponent
-        privateKey.P.Should().NotBeNull();
-        privateKey.Q.Should().NotBeNull();
+        jwkJson.Should().NotBeNullOrEmpty();
+        jwkJson.Should().Contain("kty");
+        jwkJson.Should().Contain("AKP");
     }
 
     /// <summary>
-    ///     Test case: ExportPublicKeyPem should return a valid PEM-formatted public key string.
-    ///     Scenario: ExportPublicKeyPem is called on a JwtTokenService instance. It should return a non-empty string
-    ///     containing "BEGIN", "PUBLIC KEY", and "END" markers in the standard PEM format, enabling the public key to be
-    ///     shared with clients for token validation purposes.
+    ///     System under test: JwtTokenService.ExportFullKeyJwk.
+    ///     Test case: ExportFullKeyJwk is called to export the complete key pair for backup or configuration.
+    ///     Expected result: Returns non-empty JSON string containing "kty" and "d" (private key component).
     /// </summary>
     [Fact]
-    public void ExportPublicKeyPem_ShouldReturnValidPemFormat()
+    public void ExportFullKeyJwk_ShouldReturnValidJson()
     {
-        // Act
-        var publicKeyPem = _jwtTokenService.ExportPublicKeyPem();
+        var jwkJson = _jwtTokenService.ExportFullKeyJwk();
 
-        // Assert
-        publicKeyPem.Should().NotBeNullOrEmpty();
-        publicKeyPem.Should().Contain("BEGIN");
-        publicKeyPem.Should().Contain("PUBLIC KEY");
-        publicKeyPem.Should().Contain("END");
-    }
-
-    /// <summary>
-    ///     Test case: ExportPrivateKeyPem should return a valid PEM-formatted private key string.
-    ///     Scenario: ExportPrivateKeyPem is called on a JwtTokenService instance. It should return a non-empty string
-    ///     containing "BEGIN" and "END" markers in the standard PEM format, enabling the private key to be exported for backup
-    ///     or configuration purposes (note: private keys should be kept secure).
-    /// </summary>
-    [Fact]
-    public void ExportPrivateKeyPem_ShouldReturnValidPemFormat()
-    {
-        // Act
-        var privateKeyPem = _jwtTokenService.ExportPrivateKeyPem();
-
-        // Assert
-        privateKeyPem.Should().NotBeNullOrEmpty();
-        privateKeyPem.Should().Contain("BEGIN");
-        privateKeyPem.Should().Contain("END");
+        jwkJson.Should().NotBeNullOrEmpty();
+        jwkJson.Should().Contain("kty");
+        jwkJson.Should().Contain("d"); // Private key component
     }
 
     #endregion
@@ -572,67 +536,35 @@ public class JwtTokenServiceTests
     #region Key Import Tests
 
     /// <summary>
-    ///     Test case: JwtTokenService should initialize successfully when provided with a valid private key in PEM format.
-    ///     Scenario: A JwtTokenService instance is created with JwtSettings containing a valid RSA private key in PEM format.
-    ///     The constructor should complete without throwing an exception, confirming that valid private keys can be imported
-    ///     and used for token signing.
+    ///     System under test: JwtTokenService constructor.
+    ///     Test case: JwtTokenService is constructed with JwtSettings containing a valid ML-DSA JWK in MldsaJwk.
+    ///     Expected result: Constructor completes without throwing; service is ready for token generation and validation.
     /// </summary>
     [Fact]
-    public void JwtTokenService_WithValidPrivateKey_ShouldInitialize()
+    public void JwtTokenService_WithValidMldsaJwk_ShouldInitialize()
     {
-        // Arrange
-        var (privateKey, _) = RsaKeyGenerator.GenerateKeyPair();
+        var (fullJwk, _) = MlDsaKeyGenerator.GenerateKeyPair();
         var settings = new JwtSettings
         {
             Issuer = "test",
             Audience = "test",
-            PrivateKey = privateKey
+            MldsaJwk = fullJwk
         };
         var options = Options.Create(settings);
 
-        // Act
         var act = () => new JwtTokenService(options);
 
-        // Assert
         act.Should().NotThrow();
     }
 
     /// <summary>
-    ///     Test case: JwtTokenService should initialize successfully when provided with a valid public key in PEM format.
-    ///     Scenario: A JwtTokenService instance is created with JwtSettings containing a valid RSA public key in PEM format.
-    ///     The constructor should complete without throwing an exception, confirming that valid public keys can be imported
-    ///     for token validation scenarios (note: token signing would not be possible with only a public key).
-    /// </summary>
-    [Fact]
-    public void JwtTokenService_WithValidPublicKey_ShouldInitialize()
-    {
-        // Arrange
-        var (_, publicKey) = RsaKeyGenerator.GenerateKeyPair();
-        var settings = new JwtSettings
-        {
-            Issuer = "test",
-            Audience = "test",
-            PublicKey = publicKey
-        };
-        var options = Options.Create(settings);
-
-        // Act
-        var act = () => new JwtTokenService(options);
-
-        // Assert
-        act.Should().NotThrow();
-    }
-
-    /// <summary>
-    ///     Test case: JwtTokenService should generate new RSA keys automatically when no keys are provided in configuration.
-    ///     Scenario: A JwtTokenService instance is created with JwtSettings that do not contain PrivateKey or PublicKey
-    ///     values. The constructor should complete successfully and generate new RSA keys automatically, allowing the service
-    ///     to function in development environments where keys may not be pre-configured.
+    ///     System under test: JwtTokenService constructor.
+    ///     Test case: JwtTokenService is constructed with JwtSettings that have no MldsaJwk configured.
+    ///     Expected result: Service auto-generates a new ML-DSA key pair; GetPublicKeyJwk returns valid JWK with non-empty X.
     /// </summary>
     [Fact]
     public void JwtTokenService_WithNoKeys_ShouldGenerateNewKeys()
     {
-        // Arrange
         var settings = new JwtSettings
         {
             Issuer = "test",
@@ -640,37 +572,83 @@ public class JwtTokenServiceTests
         };
         var options = Options.Create(settings);
 
-        // Act
         var service = new JwtTokenService(options);
 
-        // Assert
-        var publicKey = service.GetPublicKey();
-        publicKey.Modulus.Should().NotBeNull();
+        var jwk = service.GetPublicKeyJwk();
+        jwk.Should().NotBeNull();
+        jwk.X.Should().NotBeNullOrEmpty();
     }
 
     /// <summary>
-    ///     Test case: JwtTokenService should throw an exception when provided with an invalid private key format.
-    ///     Scenario: A JwtTokenService instance is created with JwtSettings containing an invalid private key string (not in
-    ///     valid PEM format). The constructor should throw an Exception (typically CryptographicException), confirming that
-    ///     invalid key formats are properly rejected to prevent runtime errors during token operations.
+    ///     System under test: JwtTokenService constructor.
+    ///     Test case: JwtTokenService is constructed with JwtSettings containing invalid MldsaJwk (malformed string).
+    ///     Expected result: Constructor throws an Exception (e.g. CryptographicException or JsonException).
     /// </summary>
     [Fact]
-    public void JwtTokenService_WithInvalidPrivateKey_ShouldThrowException()
+    public void JwtTokenService_WithInvalidMldsaJwk_ShouldThrowException()
     {
-        // Arrange
         var settings = new JwtSettings
         {
             Issuer = "test",
             Audience = "test",
-            PrivateKey = "invalid-key"
+            MldsaJwk = "invalid-key"
         };
         var options = Options.Create(settings);
 
-        // Act
         var act = () => new JwtTokenService(options);
 
-        // Assert
         act.Should().Throw<Exception>();
+    }
+
+    /// <summary>
+    ///     System under test: JwtTokenService constructor and GenerateToken.
+    ///     Test case: JwtTokenService is constructed with MldsaJwk containing base64-encoded JWK (common in env vars).
+    ///     Expected result: Constructor decodes base64 and loads JWK successfully; GenerateToken produces a valid token.
+    /// </summary>
+    [Fact]
+    public void JwtTokenService_WithBase64EncodedMldsaJwk_ShouldInitialize()
+    {
+        var (fullJwk, _) = MlDsaKeyGenerator.GenerateKeyPair();
+        var base64Jwk = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(fullJwk));
+        var settings = new JwtSettings
+        {
+            Issuer = "test",
+            Audience = "test",
+            MldsaJwk = base64Jwk
+        };
+        var options = Options.Create(settings);
+
+        var act = () => new JwtTokenService(options);
+
+        act.Should().NotThrow();
+        var service = new JwtTokenService(options);
+        var token = service.GenerateToken(
+            new ApplicationUser { Id = Guid.NewGuid(), UserName = "u", Email = "e@e.com", TenantId = Guid.NewGuid() },
+            ["Admin"]);
+        token.Should().NotBeNullOrEmpty();
+    }
+
+    /// <summary>
+    ///     System under test: JwtTokenService.ValidateAndDecodeToken.
+    ///     Test case: A token generated by the same service is passed to ValidateAndDecodeToken with validateSignature true.
+    ///     Expected result: Returns non-null JwtSecurityToken with claims including sub matching the user ID.
+    /// </summary>
+    [Fact]
+    public void ValidateAndDecodeToken_WithValidMlDsaToken_ShouldReturnDecodedToken()
+    {
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = "testuser",
+            Email = "test@example.com",
+            TenantId = Guid.NewGuid()
+        };
+        var token = _jwtTokenService.GenerateToken(user, ["Admin"]);
+
+        var decoded = _jwtTokenService.ValidateAndDecodeToken(token, validateSignature: true);
+
+        decoded.Should().NotBeNull();
+        decoded!.Claims.Should().Contain(c => c.Type == "sub" && c.Value == user.Id.ToString());
     }
 
     #endregion

@@ -31,13 +31,21 @@ public class JwtSettings
     public int RefreshTokenExpirationDays { get; set; } = 7;
 
     /// <summary>
-    ///     RSA private key (PEM format) for signing tokens
+    ///     ML-DSA key pair as JSON Web Key (base64-encoded JSON or raw JSON).
+    ///     Used for signing and validation. When not set, a new key pair is generated (development only).
     /// </summary>
+    public string? MldsaJwk { get; set; }
+
+    /// <summary>
+    ///     Legacy: RSA private key (PEM format). Deprecated; use MldsaJwk for ML-DSA.
+    /// </summary>
+    [Obsolete("Use MldsaJwk for ML-DSA post-quantum signing")]
     public string? PrivateKey { get; set; }
 
     /// <summary>
-    ///     RSA public key (PEM format) for validating tokens
+    ///     Legacy: RSA public key (PEM format). Deprecated; use MldsaJwk for ML-DSA.
     /// </summary>
+    [Obsolete("Use MldsaJwk for ML-DSA post-quantum signing")]
     public string? PublicKey { get; set; }
 
     /// <summary>
