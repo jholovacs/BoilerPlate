@@ -50,6 +50,22 @@ try {
     Write-ColorOutput Green "  ✓ Diagnostics API project built successfully"
 } finally { Pop-Location }
 
+Write-ColorOutput Yellow "Building LDAP server host .NET project..."
+Push-Location $projectRoot
+try {
+    dotnet build BoilerPlate.Authentication.LdapServer.Host/BoilerPlate.Authentication.LdapServer.Host.csproj -c Release -m
+    if ($LASTEXITCODE -ne 0) { throw "LDAP server build failed" }
+    Write-ColorOutput Green "  ✓ LDAP server host project built successfully"
+} finally { Pop-Location }
+
+Write-ColorOutput Yellow "Building RADIUS server host .NET project..."
+Push-Location $projectRoot
+try {
+    dotnet build BoilerPlate.Authentication.RadiusServer.Host/BoilerPlate.Authentication.RadiusServer.Host.csproj -c Release -m
+    if ($LASTEXITCODE -ne 0) { throw "RADIUS server build failed" }
+    Write-ColorOutput Green "  ✓ RADIUS server host project built successfully"
+} finally { Pop-Location }
+
 # 2. Build frontend (optional - Docker can build if this fails)
 Write-ColorOutput Yellow "Building frontend Angular project..."
 Push-Location $projectRoot
@@ -112,6 +128,8 @@ try {
         @{ Name = "audit"; File = "BoilerPlate.Services.Audit/Dockerfile"; Tag = "boilerplate-services-audit:latest" },
         @{ Name = "event-logs"; File = "BoilerPlate.Services.EventLogs/Dockerfile"; Tag = "boilerplate-services-event-logs:latest" },
         @{ Name = "diagnostics"; File = "BoilerPlate.Diagnostics.WebApi/Dockerfile"; Tag = "boilerplate-diagnostics-webapi:latest" },
+        @{ Name = "ldap"; File = "BoilerPlate.Authentication.LdapServer.Host/Dockerfile"; Tag = "boilerplate-ldap-server:latest" },
+        @{ Name = "radius"; File = "BoilerPlate.Authentication.RadiusServer.Host/Dockerfile"; Tag = "boilerplate-radius-server:latest" },
         @{ Name = "frontend"; File = "BoilerPlate.Frontend/Dockerfile"; Tag = "boilerplate-frontend:latest" }
     ) | ForEach-Object {
         Write-ColorOutput Yellow "  Building $($_.Name)..."
@@ -126,9 +144,9 @@ Write-ColorOutput Yellow "Starting Docker services..."
 Push-Location $projectRoot
 try {
     if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
-        docker-compose up -d webapi audit event-logs diagnostics frontend
+        docker-compose up -d webapi audit event-logs diagnostics ldap radius frontend
     } else {
-        docker compose up -d webapi audit event-logs diagnostics frontend
+        docker compose up -d webapi audit event-logs diagnostics ldap radius frontend
     }
     if ($LASTEXITCODE -ne 0) { throw "Failed to start services" }
     Write-ColorOutput Green "  ✓ Services started"
@@ -144,4 +162,6 @@ Write-Host "  - Frontend: https://localhost:4200"
 Write-Host "  - Auth API Swagger: https://localhost:4200/swagger"
 Write-Host "  - Diagnostics Swagger: https://localhost:4200/diagnostics/swagger"
 Write-Host "  - RabbitMQ Management: https://localhost:4200/amqp/"
+Write-Host "  - LDAP server: ldap://localhost:10389"
+Write-Host "  - RADIUS server: localhost:11812 (UDP)"
 Write-Host ""

@@ -50,3 +50,16 @@ services:
       MONGODB_CONNECTION_STRING: mongodb://admin:${MONGO_INITDB_ROOT_PASSWORD:-SecurePassword123!}@mongodb:27017/logs?authSource=admin
       RABBITMQ_CONNECTION_STRING: amqp://admin:${RABBITMQ_DEFAULT_PASS:-SecurePassword123!}@rabbitmq:5672/
       JWT_ISSUER_URL: ${JWT_ISSUER_URL:-https://localhost}
+
+  ldap:
+    ports: []  # No host port - internal only; expose via reverse proxy if needed
+    environment:
+      ConnectionStrings__PostgreSqlConnection: Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD:-SecurePassword123!}
+      LdapServer__DefaultTenantId: ${LDAP_DEFAULT_TENANT_ID:-}
+
+  radius:
+    ports: []  # No host port - internal only; expose via reverse proxy if needed
+    environment:
+      ConnectionStrings__PostgreSqlConnection: Host=postgres;Port=5432;Database=BoilerPlateAuth;Username=boilerplate;Password=${POSTGRES_PASSWORD:-SecurePassword123!}
+      RadiusServer__SharedSecret: ${RADIUS_SHARED_SECRET:-radsec}
+      RadiusServer__DefaultTenantId: ${RADIUS_DEFAULT_TENANT_ID:-}

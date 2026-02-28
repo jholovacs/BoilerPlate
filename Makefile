@@ -1,4 +1,4 @@
-.PHONY: help setup setup-keys setup-tls-certs setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-event-logs-image rebuild-event-logs-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-event-logs rebuild-diagnostics rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-event-logs docker-logs-diagnostics docker-logs-frontend clean verify test setup-production migrate-production docker-up-production verify-prereqs
+.PHONY: help setup setup-keys setup-tls-certs setup-env setup-volumes ensure-services ensure-postgres build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-ldap-project build-radius-project build-frontend-project run-migration migrate migrate-only rebuild-webapi-image rebuild-webapi-docker rebuild-audit-image rebuild-audit-docker rebuild-event-logs-image rebuild-event-logs-docker rebuild-diagnostics-image rebuild-diagnostics-docker rebuild-ldap-image rebuild-ldap-docker rebuild-radius-image rebuild-radius-docker rebuild-frontend-docker docker-up docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-ldap docker-up-radius docker-up-frontend docker-down docker-build rebuild-webapi rebuild-audit rebuild-event-logs rebuild-diagnostics rebuild-ldap rebuild-radius rebuild-frontend redeploy docker-logs docker-logs-webapi docker-logs-audit docker-logs-event-logs docker-logs-diagnostics docker-logs-ldap docker-logs-radius docker-logs-frontend clean verify test setup-production migrate-production docker-up-production verify-prereqs
 
 # Project root (avoids getcwd failures in WSL when cwd becomes invalid)
 # Allow override: make setup PROJECT_ROOT=/mnt/d/Code/BoilerPlate
@@ -153,7 +153,7 @@ help: ## Show this help message
 	@echo "  Database: $(POSTGRES_DB)"
 	@echo "  (Override with: make setup POSTGRES_PASSWORD=YourPassword)"
 
-setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
+setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-ldap-project build-radius-project build-frontend-project run-migration rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-ldap-docker rebuild-radius-docker rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-ldap docker-up-radius docker-up-frontend ## Complete setup: create/reset volumes, create services, build projects, run migrations, create images, and start containers
 	@echo "$(GREEN)$(OK) Setup complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs (HTTPS on port 4200 - accept self-signed cert in browser):$(NC)"
@@ -161,6 +161,8 @@ setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes e
 	@echo "  - Auth API / Swagger: https://localhost:4200/swagger (proxied from webapi)"
 	@echo "  - Diagnostics API / Swagger: https://localhost:4200/diagnostics/swagger"
 	@echo "  - RabbitMQ Management: https://localhost:4200/amqp/ (OAuth2 - Service Administrator only)"
+	@echo "  - LDAP server: ldap://localhost:10389 (plain LDAP for development)"
+	@echo "  - RADIUS server: localhost:11812 (UDP auth for VPN/WiFi)"
 	@echo ""
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Review the .env file (it contains base64-encoded JWT keys)"
@@ -170,7 +172,7 @@ setup: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes e
 # --- Production targets (single-port, locked down) ---
 # See PRODUCTION_HARDENING.md for full guide.
 
-setup-production: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project migrate-production rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker docker-up-production ## Production setup: single-port (443), no internal ports exposed
+setup-production: verify-prerequisites setup-keys setup-tls-certs setup-env setup-volumes ensure-services build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-ldap-project build-radius-project build-frontend-project migrate-production rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-ldap-docker rebuild-radius-docker rebuild-frontend-docker docker-up-production ## Production setup: single-port (443), no internal ports exposed
 	@echo "$(GREEN)$(OK) Production setup complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)HTTPS on port 443. Ensure JWT_ISSUER_URL in .env matches your public URL.$(NC)"
@@ -526,6 +528,32 @@ build-diagnostics-project: ## Build the diagnostics API .NET project (dotnet bui
 		exit 1; \
 	fi
 
+build-ldap-project: ## Build the LDAP server host .NET project (dotnet build)
+	@echo "$(YELLOW)Building LDAP server host .NET project...$(NC)"
+	@if ! command -v dotnet > /dev/null 2>&1; then \
+		echo "$(RED)  $(FAIL) .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
+		exit 1; \
+	fi
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Authentication.LdapServer.Host/BoilerPlate.Authentication.LdapServer.Host.csproj -c Release -m 2>&1; then \
+		echo "$(GREEN)  $(OK) LDAP server host project built successfully$(NC)"; \
+	else \
+		echo "$(RED)  $(FAIL) LDAP server host project build failed$(NC)"; \
+		exit 1; \
+	fi
+
+build-radius-project: ## Build the RADIUS server host .NET project (dotnet build)
+	@echo "$(YELLOW)Building RADIUS server host .NET project...$(NC)"
+	@if ! command -v dotnet > /dev/null 2>&1; then \
+		echo "$(RED)  $(FAIL) .NET SDK is not installed. Please install .NET SDK 8.0 or later.$(NC)"; \
+		exit 1; \
+	fi
+	@if cd "$(PROJECT_ROOT)" && dotnet build BoilerPlate.Authentication.RadiusServer.Host/BoilerPlate.Authentication.RadiusServer.Host.csproj -c Release -m 2>&1; then \
+		echo "$(GREEN)  $(OK) RADIUS server host project built successfully$(NC)"; \
+	else \
+		echo "$(RED)  $(FAIL) RADIUS server host project build failed$(NC)"; \
+		exit 1; \
+	fi
+
 build-frontend-project: ## Build the frontend Angular project (npm install and build)
 	@cd "$(PROJECT_ROOT)" && echo "$(YELLOW)Building frontend Angular project...$(NC)"
 	@cd "$(PROJECT_ROOT)" && if ! command -v node > /dev/null 2>&1; then \
@@ -746,6 +774,42 @@ docker-up-diagnostics: ## Start only the diagnostics API service (assumes other 
 	fi
 	@echo "$(GREEN)$(OK) Diagnostics API service started$(NC)"
 
+docker-up-ldap: ## Start only the LDAP server service (assumes other services are already running)
+	@echo "$(YELLOW)Starting LDAP server service...$(NC)"
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		docker-compose up -d --no-deps ldap 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker-compose up -d ldap 2>&1; \
+		}; \
+	elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+		docker compose up -d --no-deps ldap 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker compose up -d ldap 2>&1; \
+		}; \
+	else \
+		echo "$(RED)  $(FAIL) Docker Compose is not available$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)$(OK) LDAP server service started$(NC)"
+
+docker-up-radius: ## Start only the RADIUS server service (assumes other services are already running)
+	@echo "$(YELLOW)Starting RADIUS server service...$(NC)"
+	@if command -v docker-compose > /dev/null 2>&1; then \
+		docker-compose up -d --no-deps radius 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker-compose up -d radius 2>&1; \
+		}; \
+	elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+		docker compose up -d --no-deps radius 2>&1 || { \
+			echo "$(YELLOW)  Falling back to starting without --no-deps...$(NC)"; \
+			docker compose up -d radius 2>&1; \
+		}; \
+	else \
+		echo "$(RED)  $(FAIL) Docker Compose is not available$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)$(OK) RADIUS server service started$(NC)"
+
 docker-up-frontend: ## Start only the frontend service (assumes other services are already running)
 	@echo "$(YELLOW)Starting frontend service...$(NC)"
 	@if command -v docker-compose > /dev/null 2>&1; then \
@@ -962,7 +1026,139 @@ rebuild-diagnostics-docker: ensure-services ## Build the diagnostics API Docker 
 
 rebuild-diagnostics: rebuild-diagnostics-docker ## Rebuild the diagnostics API Docker image (alias for rebuild-diagnostics-docker)
 
-redeploy: build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-event-logs-image rebuild-diagnostics-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, event-logs, diagnostics, and frontend services (leaves third-party services unchanged)
+rebuild-ldap-image: ## Build the LDAP server Docker image without ensuring services (assumes services are already running)
+	@echo "$(YELLOW)Rebuilding LDAP server Docker image (assuming services are already running)...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(RED)  $(FAIL) Docker is not running. Please start Docker Desktop first.$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps -a --filter "name=boilerplate-ldap-server" --format "{{.Names}}" | grep -q "boilerplate-ldap-server"; then \
+		echo "$(YELLOW)  Stopping and removing existing LDAP server container...$(NC)"; \
+		docker-compose stop ldap 2>/dev/null || docker compose stop ldap 2>/dev/null || true; \
+		docker-compose rm -f ldap 2>/dev/null || docker compose rm -f ldap 2>/dev/null || docker rm -f boilerplate-ldap-server 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building LDAP server image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.LdapServer.Host/Dockerfile -t boilerplate-ldap-server:latest . 2>&1; then \
+		echo "$(GREEN)  $(OK) LDAP server image built successfully$(NC)"; \
+	else \
+		BUILD_EXIT=$$?; \
+		echo "$(RED)  $(FAIL) Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+		echo "$(YELLOW)  This likely means base images are not cached.$(NC)"; \
+		echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-ldap-docker: ensure-services ## Build the LDAP server Docker image and create the container (uses cached base images, only rebuilding code changes)
+	@echo "$(YELLOW)Rebuilding LDAP server Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(YELLOW)  $(WARN) Docker is not running. Skipping image rebuild.$(NC)"; \
+		echo "$(YELLOW)  Start Docker Desktop and run 'make rebuild-ldap-image' to rebuild the image$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps --filter "name=boilerplate-ldap-server" --format "{{.Names}}" | grep -q "boilerplate-ldap-server"; then \
+		echo "$(YELLOW)  Stopping existing LDAP server container...$(NC)"; \
+		docker-compose stop ldap 2>/dev/null || docker compose stop ldap 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building LDAP server image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if command -v docker > /dev/null 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.LdapServer.Host/Dockerfile -t boilerplate-ldap-server:latest . 2>&1; then \
+			echo "$(GREEN)  $(OK) LDAP server image built successfully (using cached base images)$(NC)"; \
+			echo "$(YELLOW)  Creating LDAP server container (not starting it)...$(NC)"; \
+			if docker ps -a --filter "name=boilerplate-ldap-server" --format "{{.Names}}" | grep -q "boilerplate-ldap-server"; then \
+				echo "$(GREEN)  $(OK) LDAP server container already exists$(NC)"; \
+			else \
+				if command -v docker-compose > /dev/null 2>&1; then \
+					docker-compose create --no-build ldap 2>&1 || true; \
+				elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+					docker compose create --no-build ldap 2>&1 || true; \
+				fi; \
+			fi; \
+		else \
+			BUILD_EXIT=$$?; \
+			echo "$(RED)  $(FAIL) Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+			echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(YELLOW)  $(WARN) Docker not available. Skipping rebuild.$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-ldap: rebuild-ldap-docker ## Rebuild the LDAP server Docker image (alias for rebuild-ldap-docker)
+
+rebuild-radius-image: ## Build the RADIUS server Docker image without ensuring services (assumes services are already running)
+	@echo "$(YELLOW)Rebuilding RADIUS server Docker image (assuming services are already running)...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(RED)  $(FAIL) Docker is not running. Please start Docker Desktop first.$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps -a --filter "name=boilerplate-radius-server" --format "{{.Names}}" | grep -q "boilerplate-radius-server"; then \
+		echo "$(YELLOW)  Stopping and removing existing RADIUS server container...$(NC)"; \
+		docker-compose stop radius 2>/dev/null || docker compose stop radius 2>/dev/null || true; \
+		docker-compose rm -f radius 2>/dev/null || docker compose rm -f radius 2>/dev/null || docker rm -f boilerplate-radius-server 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building RADIUS server image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.RadiusServer.Host/Dockerfile -t boilerplate-radius-server:latest . 2>&1; then \
+		echo "$(GREEN)  $(OK) RADIUS server image built successfully$(NC)"; \
+	else \
+		BUILD_EXIT=$$?; \
+		echo "$(RED)  $(FAIL) Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+		echo "$(YELLOW)  This likely means base images are not cached.$(NC)"; \
+		echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+		echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-radius-docker: ensure-services ## Build the RADIUS server Docker image and create the container (uses cached base images, only rebuilding code changes)
+	@echo "$(YELLOW)Rebuilding RADIUS server Docker image...$(NC)"
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "$(YELLOW)  $(WARN) Docker is not running. Skipping image rebuild.$(NC)"; \
+		echo "$(YELLOW)  Start Docker Desktop and run 'make rebuild-radius-image' to rebuild the image$(NC)"; \
+		exit 1; \
+	fi
+	@if docker ps --filter "name=boilerplate-radius-server" --format "{{.Names}}" | grep -q "boilerplate-radius-server"; then \
+		echo "$(YELLOW)  Stopping existing RADIUS server container...$(NC)"; \
+		docker-compose stop radius 2>/dev/null || docker compose stop radius 2>/dev/null || true; \
+	fi
+	@echo "$(YELLOW)  Building RADIUS server image (using cached base images, only rebuilding code changes)...$(NC)"
+	@echo "$(YELLOW)  Using DOCKER_BUILDKIT=1 for parallel builds and better caching$(NC)"
+	@if command -v docker > /dev/null 2>&1; then \
+		if DOCKER_BUILDKIT=1 docker build --pull=false -f BoilerPlate.Authentication.RadiusServer.Host/Dockerfile -t boilerplate-radius-server:latest . 2>&1; then \
+			echo "$(GREEN)  $(OK) RADIUS server image built successfully (using cached base images)$(NC)"; \
+			echo "$(YELLOW)  Creating RADIUS server container (not starting it)...$(NC)"; \
+			if docker ps -a --filter "name=boilerplate-radius-server" --format "{{.Names}}" | grep -q "boilerplate-radius-server"; then \
+				echo "$(GREEN)  $(OK) RADIUS server container already exists$(NC)"; \
+			else \
+				if command -v docker-compose > /dev/null 2>&1; then \
+					docker-compose create --no-build radius 2>&1 || true; \
+				elif command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then \
+					docker compose create --no-build radius 2>&1 || true; \
+				fi; \
+			fi; \
+		else \
+			BUILD_EXIT=$$?; \
+			echo "$(RED)  $(FAIL) Build failed (exit code: $$BUILD_EXIT)$(NC)"; \
+			echo "$(YELLOW)  To cache base images (run once):$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/aspnet:8.0$(NC)"; \
+			echo "$(YELLOW)    docker pull mcr.microsoft.com/dotnet/sdk:8.0$(NC)"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "$(YELLOW)  $(WARN) Docker not available. Skipping rebuild.$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-radius: rebuild-radius-docker ## Rebuild the RADIUS server Docker image (alias for rebuild-radius-docker)
+
+redeploy: build-webapi-project build-audit-project build-event-logs-project build-diagnostics-project build-ldap-project build-radius-project build-frontend-project migrate-only rebuild-webapi-image rebuild-audit-image rebuild-event-logs-image rebuild-diagnostics-image rebuild-ldap-image rebuild-radius-image rebuild-frontend-docker docker-up-webapi docker-up-audit docker-up-event-logs docker-up-diagnostics docker-up-ldap docker-up-radius docker-up-frontend ## Rebuild code, run migrations, and redeploy webapi, audit, event-logs, diagnostics, ldap, radius, and frontend services (leaves third-party services unchanged)
 	@echo "$(GREEN)$(OK) Redeploy complete!$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Service URLs (all via port 4200):$(NC)"
@@ -970,6 +1166,8 @@ redeploy: build-webapi-project build-audit-project build-event-logs-project buil
 	@echo "  - Auth API Swagger: http://localhost:4200/swagger"
 	@echo "  - Diagnostics Swagger: http://localhost:4200/diagnostics/swagger"
 	@echo "  - RabbitMQ Management: http://localhost:4200/amqp/"
+	@echo "  - LDAP server: ldap://localhost:10389"
+	@echo "  - RADIUS server: localhost:11812 (UDP)"
 
 rebuild-webapi: rebuild-webapi-docker ## Rebuild the webapi Docker image (alias for rebuild-webapi-docker)
 
@@ -1122,9 +1320,9 @@ rebuild-frontend-docker: ## Build the frontend Docker image
 
 rebuild-frontend: rebuild-frontend-docker ## Rebuild the frontend Docker image (alias for rebuild-frontend-docker)
 
-docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-frontend-docker ## Build and start the webapi, audit, event-logs, diagnostics, and frontend services
+docker-build: rebuild-webapi-docker rebuild-audit-docker rebuild-event-logs-docker rebuild-diagnostics-docker rebuild-ldap-docker rebuild-radius-docker rebuild-frontend-docker ## Build and start the webapi, audit, event-logs, diagnostics, ldap, radius, and frontend services
 	@echo "$(YELLOW)Starting services...$(NC)"
-	@docker-compose up -d webapi audit event-logs diagnostics frontend || docker compose up -d webapi audit event-logs diagnostics frontend || true
+	@docker-compose up -d webapi audit event-logs diagnostics ldap radius frontend || docker compose up -d webapi audit event-logs diagnostics ldap radius frontend || true
 	@echo "$(GREEN)$(OK) Services rebuilt and started$(NC)"
 
 docker-logs: ## View logs from all services
@@ -1138,6 +1336,12 @@ docker-logs-audit: ## View logs from audit service only
 
 docker-logs-diagnostics: ## View logs from diagnostics API service only
 	@docker-compose logs -f diagnostics || docker compose logs -f diagnostics
+
+docker-logs-ldap: ## View logs from LDAP server service only
+	@docker-compose logs -f ldap || docker compose logs -f ldap
+
+docker-logs-radius: ## View logs from RADIUS server service only
+	@docker-compose logs -f radius || docker compose logs -f radius
 
 docker-logs-frontend: ## View logs from frontend service only
 	@docker-compose logs -f frontend || docker compose logs -f frontend
@@ -1171,6 +1375,8 @@ verify: ## Verify the setup
 	@docker ps --filter "name=otel-collector" --format "{{.Names}}" | grep -q "otel-collector" && echo "$(GREEN)  $(OK) OTEL Collector is running$(NC)" || echo "$(YELLOW)  $(NONE) OTEL Collector is not running$(NC)"
 	@docker ps --filter "name=boilerplate-auth-api" --format "{{.Names}}" | grep -q "boilerplate-auth-api" && echo "$(GREEN)  $(OK) WebAPI is running$(NC)" || echo "$(YELLOW)  $(NONE) WebAPI is not running$(NC)"
 	@docker ps --filter "name=boilerplate-diagnostics-api" --format "{{.Names}}" | grep -q "boilerplate-diagnostics-api" && echo "$(GREEN)  $(OK) Diagnostics API is running$(NC)" || echo "$(YELLOW)  $(NONE) Diagnostics API is not running$(NC)"
+	@docker ps --filter "name=boilerplate-ldap-server" --format "{{.Names}}" | grep -q "boilerplate-ldap-server" && echo "$(GREEN)  $(OK) LDAP server is running$(NC)" || echo "$(YELLOW)  $(NONE) LDAP server is not running$(NC)"
+	@docker ps --filter "name=boilerplate-radius-server" --format "{{.Names}}" | grep -q "boilerplate-radius-server" && echo "$(GREEN)  $(OK) RADIUS server is running$(NC)" || echo "$(YELLOW)  $(NONE) RADIUS server is not running$(NC)"
 	@docker ps --filter "name=boilerplate-frontend" --format "{{.Names}}" | grep -q "boilerplate-frontend" && echo "$(GREEN)  $(OK) Frontend is running$(NC)" || echo "$(YELLOW)  $(NONE) Frontend is not running$(NC)"
 
 clean: ## Remove generated files (keeps JWT keys)
